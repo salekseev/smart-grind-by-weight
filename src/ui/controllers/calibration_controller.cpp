@@ -1,4 +1,6 @@
 #include "calibration_controller.h"
+#include <cstdint>
+#include <cstdio>
 #include "../../system/timing.h"
 
 #include <limits>

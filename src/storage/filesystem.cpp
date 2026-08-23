@@ -1,4 +1,6 @@
 #include "filesystem.h"
+#include <cstdint>
+#include <cstdio>
 
 #include <dirent.h>
 #include <esp_littlefs.h>

@@ -1,4 +1,6 @@
 #include "provisioning_service.h"
+#include <cstdint>
+#include <cstdio>
 #include <esp_system.h>
 #include "../system/device_info.h"
 #include "../system/timing.h"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "circular_buffer_math/circular_buffer_math.h"
+#include <cstdint>
 #include "load_cell_driver.h"
 #include "hx711_driver.h"
 #include "../config/constants.h"

@@ -1,4 +1,7 @@
 #include "menu_screen.h"
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include "../../system/timing.h"
 #include "../../config/build_info.h"
 #include <algorithm>

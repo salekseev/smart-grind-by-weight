@@ -1,6 +1,10 @@
 #include "grind_logging.h"
 #include "session_file.h"
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/timing.h"

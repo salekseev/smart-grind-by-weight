@@ -1,5 +1,7 @@
 #pragma once
 #include "../storage/preferences.h"
+#include <cstdint>
+#include <cstring>
 #include "../config/constants.h"
 #include "../controllers/grind_session.h"
 

@@ -1,4 +1,5 @@
 #include "touch_driver.h"
+#include <cstdint>
 #include "../system/timing.h"
 #include "esp_err.h"
 #include "esp_log.h"

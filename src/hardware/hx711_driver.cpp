@@ -1,4 +1,5 @@
 #include "hx711_driver.h"
+#include <cstdint>
 #include <esp_rom_sys.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>

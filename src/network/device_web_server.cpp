@@ -1,4 +1,9 @@
 #include "device_web_server.h"
+#include <cctype>
+#include <cstdint>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>

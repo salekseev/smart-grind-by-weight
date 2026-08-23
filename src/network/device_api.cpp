@@ -1,4 +1,9 @@
 #include "device_api.h"
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
+#include <freertos/FreeRTOS.h>
+#include <cstdint>
+#include <cstdio>
 #include <esp_system.h>
 #include "../system/device_info.h"
 #include "../system/timing.h"

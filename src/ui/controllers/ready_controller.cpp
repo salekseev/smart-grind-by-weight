@@ -1,4 +1,5 @@
 #include "ready_controller.h"
+#include <cstdint>
 #include "../../system/timing.h"
 
 #include "../../storage/preferences.h"

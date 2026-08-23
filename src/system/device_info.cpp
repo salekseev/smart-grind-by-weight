@@ -1,4 +1,5 @@
 #include "device_info.h"
+#include <cstdint>
 
 #include <esp_flash.h>
 #include <esp_heap_caps.h>

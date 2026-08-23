@@ -1,4 +1,7 @@
 #include "task_manager.h"
+#include <freertos/queue.h>
+#include <cstdint>
+#include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/timing.h"

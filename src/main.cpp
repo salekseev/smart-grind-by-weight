@@ -1,28 +1,33 @@
-#include "storage/filesystem.h"
+#include <esp_event.h>
+#include <cstdint>
+#include <esp_netif.h>
+#include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include "system/device_info.h"
-#include "system/timing.h"
-#include "storage/preferences.h"
-#include <esp_system.h>
-#include "hardware/hardware_manager.h"
-#include "system/state_machine.h"
-#include "system/statistics_manager.h"
-#include "controllers/profile_controller.h"
-#include "controllers/grind_controller.h"
-#include "ui/ui_manager.h"
-#include "config/constants.h"
-#include "system/screensaver_settings.h"
-#include "config/build_info.h"
+#include <nvs_flash.h>
+
 #include "bluetooth/manager.h"
-#include "tasks/task_manager.h"
-#include "tasks/weight_sampling_task.h"
-#include "tasks/grind_control_task.h"
-#include "tasks/file_io_task.h"
-#include "network/network_manager.h"
-#include "network/provisioning_service.h"
+#include "config/build_info.h"
+#include "config/constants.h"
+#include "controllers/grind_controller.h"
+#include "controllers/profile_controller.h"
+#include "hardware/hardware_manager.h"
 #include "network/device_web_server.h"
 #include "network/gaggimate_status_client.h"
+#include "network/network_manager.h"
+#include "network/provisioning_service.h"
+#include "storage/filesystem.h"
+#include "storage/preferences.h"
+#include "system/device_info.h"
+#include "system/screensaver_settings.h"
+#include "system/state_machine.h"
+#include "system/statistics_manager.h"
+#include "system/timing.h"
+#include "tasks/file_io_task.h"
+#include "tasks/grind_control_task.h"
+#include "tasks/task_manager.h"
+#include "tasks/weight_sampling_task.h"
+#include "ui/ui_manager.h"
 
 HardwareManager hardware_manager;
 StateMachine state_machine;
@@ -78,10 +83,28 @@ void draw_early_startup_splash_if_ready() {
     }
 }
 
-}  // namespace
+/**
+ * Bring up the settings partition and the shared event loop that the
+ * Wi-Fi, BLE and HTTP services all attach to.
+ */
+void init_platform_services() {
+    esp_err_t nvs_status = nvs_flash_init();
+    if (nvs_status == ESP_ERR_NVS_NO_FREE_PAGES ||
+        nvs_status == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // A firmware update can leave the settings partition without free
+        // pages. Reformatting loses stored settings but keeps the device
+        // bootable, and every setting has a safe default.
+        LOG_BLE("[STARTUP] NVS partition needs erasing (%s)\n", esp_err_to_name(nvs_status));
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        nvs_status = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(nvs_status);
+
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+}
 
 void setup() {
-    Serial.begin(HW_SERIAL_BAUD_RATE);
 #ifdef UI_DEBUG_SERIAL_DELAY_MS
     vTaskDelay(pdMS_TO_TICKS(UI_DEBUG_SERIAL_DELAY_MS));
 #endif
@@ -133,8 +156,8 @@ void setup() {
     bluetooth_manager.init(hardware_manager.get_preferences());
     
     // Check for OTA failure to determine initial state
-    String failed_ota_build = bluetooth_manager.check_ota_failure_after_boot();
-    bool ota_failed = !failed_ota_build.isEmpty();
+    const std::string failed_ota_build = bluetooth_manager.check_ota_failure_after_boot();
+    const bool ota_failed = !failed_ota_build.empty();
 
     // Check calibration status to determine initial screen
     bool is_calibrated = hardware_manager.get_weight_sensor()->is_calibrated();
@@ -292,4 +315,16 @@ void loop() {
     // The main loop now runs much lighter since FreeRTOS tasks handle all the heavy work
     // Just yield to allow FreeRTOS scheduler to run other tasks efficiently
     vTaskDelay(pdMS_TO_TICKS(10)); // Small delay to prevent starving other tasks
+}
+
+}  // namespace
+
+extern "C" void app_main() {
+    init_platform_services();
+    setup();
+    // The service loop keeps running in the main task, which sdkconfig pins to
+    // core 1 so the Wi-Fi and BLE stacks keep core 0 to themselves.
+    while (true) {
+        loop();
+    }
 }

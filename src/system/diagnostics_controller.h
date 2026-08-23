@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cstdint>
 
 // Forward declarations
 class HardwareManager;

@@ -1,4 +1,5 @@
 #include "screen_timeout_controller.h"
+#include <cstdint>
 #include "../../system/timing.h"
 #include "screensaver_controller.h"
 

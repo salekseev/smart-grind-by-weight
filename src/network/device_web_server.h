@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ESPAsyncWebServer.h>
+#include <cstdint>
 #include <atomic>
 #include <mutex>
 #include "../system/operation_interlock.h"

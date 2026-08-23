@@ -1,4 +1,5 @@
 #include "image_upload_handler.h"
+#include <cstdint>
 #include "ota_handler.h"
 #include "../config/constants.h"
 #include "../config/logging.h"

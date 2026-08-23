@@ -1,4 +1,8 @@
 #include "grind_controller.h"
+#include <freertos/queue.h>
+#include <freertos/FreeRTOS.h>
+#include <cstdint>
+#include <cstdio>
 #include "../system/timing.h"
 #include "grind_events.h"
 #include "../hardware/circular_buffer_math/circular_buffer_math.h"

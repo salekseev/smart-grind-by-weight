@@ -1,4 +1,6 @@
 #include "ui_manager.h"
+#include <cstdint>
+#include <cstdio>
 #include "../system/timing.h"
 #include "../storage/preferences.h"
 #include <algorithm>

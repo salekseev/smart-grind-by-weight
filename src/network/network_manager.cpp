@@ -1,4 +1,9 @@
 #include "network_manager.h"
+#include <freertos/semphr.h>
+#include <freertos/FreeRTOS.h>
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
 #include <esp_system.h>
 #include "../system/device_info.h"
 #include "../system/timing.h"

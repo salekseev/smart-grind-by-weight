@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DNSServer.h>
+#include <cstdint>
 #include <ESPAsyncWebServer.h>
 #include "../storage/preferences.h"
 #include <improv.h>

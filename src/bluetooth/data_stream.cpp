@@ -1,4 +1,7 @@
 #include "data_stream.h"
+#include <esp_heap_caps.h>
+#include <cstdint>
+#include <cstdio>
 #include "../logging/grind_logging.h"
 #include "../logging/session_file.h"
 #include <algorithm>
