@@ -70,6 +70,13 @@ target_include_directories(grind-session-result-test PRIVATE
     "${PROJECT_ROOT}/src"
 )
 
+add_executable(http-multipart-test
+    http_multipart_test.cpp
+)
+target_include_directories(http-multipart-test PRIVATE
+    "${PROJECT_ROOT}/src"
+)
+
 if(MSVC)
     target_compile_options(smart-grind-sim PRIVATE /W4 /permissive-)
 endif()
@@ -89,4 +96,6 @@ if(BUILD_TESTING)
     set_tests_properties(net_weight_guard PROPERTIES TIMEOUT 5)
     add_test(NAME grind_session_result COMMAND grind-session-result-test)
     set_tests_properties(grind_session_result PROPERTIES TIMEOUT 5)
+    add_test(NAME http_multipart COMMAND http-multipart-test)
+    set_tests_properties(http_multipart PROPERTIES TIMEOUT 5)
 endif()
