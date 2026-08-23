@@ -1,6 +1,8 @@
 #pragma once
 
 #include <BLEDevice.h>
+#include <cmath>
+#include <cstdint>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>

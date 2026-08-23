@@ -1,4 +1,6 @@
 #include "screensaver_controller.h"
+#include <cstdint>
+#include <cstdio>
 #include "../../config/constants.h"
 #include "../../config/logging.h"
 #include "../../system/screensaver_settings.h"

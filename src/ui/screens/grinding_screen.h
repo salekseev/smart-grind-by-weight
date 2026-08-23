@@ -1,5 +1,6 @@
 #pragma once
 #include "grinding_screen_base.h"
+#include <cstdint>
 #include "grinding_screen_arc.h"
 #include "grinding_screen_chart.h"
 #include "../../storage/preferences.h"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstdio>
 
 // Writes to the existing USB serial console and retains a bounded recent-log
 // snapshot for read-only Wi-Fi diagnostics. The buffer is intentionally kept

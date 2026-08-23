@@ -1,4 +1,5 @@
 #include "weight_grind_strategy.h"
+#include <cstdint>
 
 #include "grind_controller.h"
 #include "../hardware/WeightSensor.h"

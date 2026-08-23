@@ -1,4 +1,5 @@
 #include "grind_control_task.h"
+#include <cstdint>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/timing.h"

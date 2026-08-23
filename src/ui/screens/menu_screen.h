@@ -1,5 +1,6 @@
 #pragma once
 #include <lvgl.h>
+#include <cstdint>
 #include "../../config/constants.h"
 #include "../../bluetooth/manager.h"
 #include "../../controllers/grind_controller.h"

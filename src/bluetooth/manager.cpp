@@ -1,4 +1,10 @@
 #include "manager.h"
+#include <freertos/queue.h>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/device_info.h"

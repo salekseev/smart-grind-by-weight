@@ -1,4 +1,5 @@
 #include "grinder.h"
+#include <cstdint>
 #include "../system/timing.h"
 #include "../controllers/grind_events.h"
 #include "../config/constants.h"

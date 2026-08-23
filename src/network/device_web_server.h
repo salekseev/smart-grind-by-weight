@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ESPAsyncWebServer.h>
+#include <cstdint>
 #include <atomic>
 
 class GrindController;

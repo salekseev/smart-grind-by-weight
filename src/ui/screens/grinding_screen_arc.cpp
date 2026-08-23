@@ -1,4 +1,5 @@
 #include "grinding_screen_arc.h"
+#include <cstdint>
 #include <cstdio>
 #include "../../config/constants.h"
 #include <cstring>

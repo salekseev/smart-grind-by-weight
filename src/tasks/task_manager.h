@@ -1,6 +1,7 @@
 #pragma once
 
 #include <freertos/FreeRTOS.h>
+#include <cstdint>
 #include <freertos/task.h>
 #include <freertos/queue.h>
 #include "../config/constants.h"

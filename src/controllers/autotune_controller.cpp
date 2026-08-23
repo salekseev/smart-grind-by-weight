@@ -1,4 +1,6 @@
 #include "autotune_controller.h"
+#include <cstdint>
+#include <cstdio>
 #include "../system/timing.h"
 #include <cmath>
 #include <cstring>

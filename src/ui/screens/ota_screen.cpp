@@ -1,4 +1,5 @@
 #include "ota_screen.h"
+#include <cstdio>
 #include "../../config/constants.h"
 
 void OTAScreen::create() {

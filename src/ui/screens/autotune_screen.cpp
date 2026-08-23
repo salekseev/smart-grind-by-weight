@@ -1,4 +1,5 @@
 #include "autotune_screen.h"
+#include <cstdio>
 #include "../ui_helpers.h"
 #include <algorithm>
 #include <cstring>

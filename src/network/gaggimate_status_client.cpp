@@ -1,4 +1,6 @@
 #include "gaggimate_status_client.h"
+#include <freertos/semphr.h>
+#include <cstdint>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/timing.h"

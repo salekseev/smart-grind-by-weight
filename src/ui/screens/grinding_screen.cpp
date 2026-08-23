@@ -1,4 +1,5 @@
 #include "grinding_screen.h"
+#include <cstdint>
 #include "../../storage/preferences.h"
 
 GrindingScreen::GrindingScreen() : current_layout(GrindScreenLayout::MINIMAL_ARC), preferences(nullptr), current_mode(GrindMode::WEIGHT) {

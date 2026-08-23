@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 
 /**
  * Abstract interface for load cell ADC drivers.

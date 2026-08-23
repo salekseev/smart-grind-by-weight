@@ -1,4 +1,5 @@
 #include "preferences.h"
+#include <cstdint>
 
 #include <esp_err.h>
 

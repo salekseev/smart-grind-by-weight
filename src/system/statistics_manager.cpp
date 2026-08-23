@@ -1,4 +1,5 @@
 #include "statistics_manager.h"
+#include <cstdint>
 #include "../system/timing.h"
 
 #include <cmath>

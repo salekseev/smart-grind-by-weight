@@ -1,5 +1,6 @@
 #pragma once
 #include "grind_controller.h"
+#include <cstdint>
 
 // Event types that GrindController can emit to UIManager
 enum class UIGrindEvent {

@@ -1,4 +1,6 @@
 #include "file_io_task.h"
+#include <freertos/queue.h>
+#include <cstdint>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/timing.h"

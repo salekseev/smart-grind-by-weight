@@ -1,4 +1,6 @@
 #include "ota_handler.h"
+#include <cstdint>
+#include <cstdio>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>

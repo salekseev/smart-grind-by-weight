@@ -1,4 +1,5 @@
 #include "grinding_controller.h"
+#include <cstdint>
 #include "../../system/timing.h"
 
 #include <cstdio>

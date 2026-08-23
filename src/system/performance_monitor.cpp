@@ -1,4 +1,5 @@
 #include "performance_monitor.h"
+#include <cstring>
 #include "../config/constants.h"
 
 PerformanceMonitor performance_monitor;

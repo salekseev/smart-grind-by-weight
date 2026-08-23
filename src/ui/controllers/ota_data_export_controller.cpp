@@ -1,4 +1,5 @@
 #include "ota_data_export_controller.h"
+#include <cstdio>
 
 #include <cstring>
 

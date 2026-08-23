@@ -1,4 +1,5 @@
 #include "screensaver_settings.h"
+#include <cstdint>
 
 #include "../storage/preferences.h"
 #include <algorithm>

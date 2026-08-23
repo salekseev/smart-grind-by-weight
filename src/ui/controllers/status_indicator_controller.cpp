@@ -1,4 +1,5 @@
 #include "status_indicator_controller.h"
+#include <cstdint>
 
 #include "../../config/constants.h"
 #include "../../controllers/grind_mode.h"

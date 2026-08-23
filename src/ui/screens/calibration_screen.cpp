@@ -1,4 +1,5 @@
 #include "calibration_screen.h"
+#include <cstdio>
 #include <cmath>
 #include <limits>
 #include "../../config/constants.h"

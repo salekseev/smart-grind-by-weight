@@ -1,4 +1,5 @@
 #include "ui_helpers.h"
+#include <cstdint>
 #include "../system/timing.h"
 #include <cstdio>
 #include <cstdlib>

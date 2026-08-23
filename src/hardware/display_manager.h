@@ -1,11 +1,10 @@
 #pragma once
 #include "../config/hardware.h"
-#if HW_DISPLAY_VARIANT_V2
+#include <cstdint>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
-#else
-#include <Arduino_GFX_Library.h>
-#endif
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <lvgl.h>
 #include "touch_driver.h"
 #include "../config/constants.h"
@@ -22,27 +21,30 @@ struct DisplayPerformanceSnapshot {
     uint32_t flush_time_us = 0;
 };
 
+/**
+ * Owns the AMOLED panel, the LVGL display/input devices and the touch driver.
+ *
+ * Both board revisions drive a QSPI AMOLED controller through esp_lcd: V1 has a
+ * CO5300 and V2 an SH8601. The two differ only in chip-select pin and power-on
+ * command sequence, so everything past initialisation is shared.
+ */
 class DisplayManager {
 private:
-#if HW_DISPLAY_VARIANT_V2
     esp_lcd_panel_io_handle_t panel_io;
     esp_lcd_panel_handle_t panel_handle;
+
+    // Colour transfers complete asynchronously. LVGL flushes are acknowledged
+    // from the completion callback; the startup splash waits on a semaphore
+    // because it runs before the LVGL timer handler exists.
     lv_display_t* pending_flush_display;
-#else
-    Arduino_DataBus* bus;
-    Arduino_GFX* gfx_device;
-#endif
+    SemaphoreHandle_t direct_draw_done;
+    volatile bool direct_draw_pending;
+
     lv_display_t* lvgl_display;
     lv_indev_t* lvgl_input;
     lv_color_t* draw_buffer;
-#if !HW_DISPLAY_VARIANT_V2
-    uint16_t* dma_staging_buffer;
-#endif
     TouchDriver touch_driver;
-#if !HW_DISPLAY_VARIANT_V2
-    uint16_t dma_staging_rows;
-#endif
-    
+
     uint32_t screen_width;
     uint32_t screen_height;
     uint32_t buffer_size;
@@ -63,20 +65,22 @@ public:
     void set_panel_power(bool powered_on);
     bool is_panel_powered_on() const { return panel_powered_on; }
     bool draw_rgb565_file(const char* path, uint16_t width, uint16_t height);
-    
+
     uint32_t get_width() const { return screen_width; }
     uint32_t get_height() const { return screen_height; }
     bool is_initialized() const { return initialized; }
     TouchDriver* get_touch_driver() { return &touch_driver; }
     DisplayPerformanceSnapshot get_performance_snapshot();
-    
+
 private:
+    bool init_panel();
+    /** Push one RGB565 block and block until the panel has consumed it. */
+    bool draw_bitmap_blocking(int x, int y, int width, int height, const void* pixels);
+
     static void display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map);
-#if HW_DISPLAY_VARIANT_V2
     static bool color_transfer_done_cb(esp_lcd_panel_io_handle_t panel_io,
                                        esp_lcd_panel_io_event_data_t* event_data,
                                        void* user_context);
-#endif
     static void display_rounder_cb(lv_event_t* e);
     static void display_metrics_cb(lv_event_t* e);
     static void touchpad_read_cb(lv_indev_t* indev, lv_indev_data_t* data);

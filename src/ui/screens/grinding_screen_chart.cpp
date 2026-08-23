@@ -1,4 +1,5 @@
 #include "grinding_screen_chart.h"
+#include <cstdint>
 #include <cstdio>
 #include "../../config/constants.h"
 #include <lvgl.h>
