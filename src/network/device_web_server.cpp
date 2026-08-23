@@ -203,13 +203,13 @@ void DeviceWebServer::begin() {
     if (!network_manager.is_radio_started()) return;
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = 80;
-    config.max_uri_handlers = 48;
-    config.max_open_sockets = 7;
+    config.server_port = SYS_HTTP_PORT;
+    config.max_uri_handlers = SYS_HTTP_MAX_URI_HANDLERS;
+    config.max_open_sockets = SYS_HTTP_MAX_OPEN_SOCKETS;
     config.lru_purge_enable = true;
-    config.stack_size = 8192;
-    config.recv_wait_timeout = 10;
-    config.send_wait_timeout = 10;
+    config.stack_size = SYS_HTTP_TASK_STACK_SIZE;
+    config.recv_wait_timeout = SYS_HTTP_SOCKET_TIMEOUT_S;
+    config.send_wait_timeout = SYS_HTTP_SOCKET_TIMEOUT_S;
 
     const esp_err_t err = httpd_start(&server_, &config);
     if (err != ESP_OK) {
@@ -237,10 +237,7 @@ void DeviceWebServer::update() {
     device_api.update();
     OtaPreparationState preparation = ota_preparation_state_.load();
     if (preparation == OtaPreparationState::REQUESTED) {
-        const bool unsafe = ota_active_.load() || !grind_controller_ ||
-                            grind_controller_->is_active() ||
-                            (bluetooth_manager_ && bluetooth_manager_->is_transfer_active());
-        if (unsafe) {
+        if (device_busy()) {
             recover_from_ota_failure();
         } else {
             if (bluetooth_manager_ && bluetooth_manager_->is_enabled()) {
@@ -248,8 +245,7 @@ void DeviceWebServer::update() {
                 bluetooth_manager_->disable();
                 ota_bluetooth_stopped_.store(true);
             }
-            if (heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >=
-                OTA_MIN_INTERNAL_HEAP) {
+            if (internal_heap_ok()) {
                 ota_preparation_deadline_ms_.store(millis() + OTA_READY_WINDOW_MS);
                 ota_preparation_state_.store(OtaPreparationState::READY);
                 LOG_BLE("[WEB OTA] Update preparation complete\n");
@@ -279,13 +275,8 @@ void DeviceWebServer::update() {
                                   : UPDATE_CHECK_INTERVAL_MS;
     const uint32_t last_check = last_firmware_update_check_ms_.load();
     const bool check_due = last_check == 0 || now - last_check >= interval;
-    const bool check_safe = network_manager.is_connected() && !ota_active_.load() &&
-                            ota_preparation_state_.load() == OtaPreparationState::IDLE &&
-                            (!grind_controller_ || !grind_controller_->is_active()) &&
-                            (!bluetooth_manager_ || !bluetooth_manager_->is_transfer_active()) &&
-                            heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >=
-                                OTA_MIN_INTERNAL_HEAP;
-    if (check_due && check_safe) {
+    if (check_due && network_manager.is_connected() && !device_busy() &&
+        ota_preparation_state_.load() == OtaPreparationState::IDLE && internal_heap_ok()) {
         bool expected_inactive = false;
         if (firmware_update_check_active_.compare_exchange_strong(expected_inactive, true)) {
             firmware_update_state_.store(FirmwareUpdateState::CHECKING);
@@ -318,10 +309,8 @@ std::string DeviceWebServer::latest_release_tag() const {
 
 bool DeviceWebServer::install_available_update() {
     if (!firmware_update_available() || latest_release_tag().empty() ||
-        !network_manager.is_connected() || ota_active_.load() ||
-        ota_preparation_state_.load() != OtaPreparationState::IDLE ||
-        (grind_controller_ && grind_controller_->is_active()) ||
-        (bluetooth_manager_ && bluetooth_manager_->is_transfer_active())) {
+        !network_manager.is_connected() || device_busy() ||
+        ota_preparation_state_.load() != OtaPreparationState::IDLE) {
         return false;
     }
     on_device_update_pending_.store(true);
@@ -379,11 +368,8 @@ void DeviceWebServer::perform_firmware_update_check() {
 }
 
 bool DeviceWebServer::is_ota_ready() const {
-    return ota_preparation_state_.load() == OtaPreparationState::READY &&
-           initialized_ && network_manager.is_connected() && !ota_active_.load() &&
-           (!grind_controller_ || !grind_controller_->is_active()) &&
-           (!bluetooth_manager_ || !bluetooth_manager_->is_transfer_active()) &&
-           heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >= OTA_MIN_INTERNAL_HEAP;
+    return ota_preparation_state_.load() == OtaPreparationState::READY && initialized_ &&
+           network_manager.is_connected() && !device_busy() && internal_heap_ok();
 }
 
 void DeviceWebServer::request_ota_preparation() {
@@ -402,6 +388,15 @@ void DeviceWebServer::recover_from_ota_failure() {
         reboot_at_ms_.store(millis() + OTA_REBOOT_DELAY_MS);
         reboot_pending_.store(true);
     }
+}
+
+bool DeviceWebServer::device_busy() const {
+    return ota_active_.load() || !grind_controller_ || grind_controller_->is_active() ||
+           (bluetooth_manager_ && bluetooth_manager_->is_transfer_active());
+}
+
+bool DeviceWebServer::internal_heap_ok() const {
+    return device_info::free_internal_heap_bytes() >= OTA_MIN_INTERNAL_HEAP;
 }
 
 uint8_t DeviceWebServer::ota_progress_percent() const {
@@ -470,12 +465,8 @@ void DeviceWebServer::configure_routes() {
         if (directory && directory.isDirectory()) {
             FsFile entry = directory.openNextFile();
             while (entry) {
-                const std::string name = entry.name();
-                const int marker = strings::last_index_of(name, "session_");
-                const int suffix = strings::last_index_of(name, ".bin");
-                if (!entry.isDirectory() && marker >= 0 && suffix > marker + 8) {
-                    const uint32_t id =
-                        strings::to_uint32(strings::slice(name, marker + 8, suffix));
+                if (!entry.isDirectory()) {
+                    const uint32_t id = session_id_from_filename(entry.name());
                     if (id > 0) session_ids.push_back(id);
                 }
                 entry = directory.openNextFile();
@@ -800,7 +791,7 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
         finish_ota(false);
         return http::send(request, 409, "text/plain", "Wait for the Bluetooth transfer to finish");
     }
-    if (device_info::free_internal_heap_bytes() < OTA_MIN_INTERNAL_HEAP) {
+    if (!internal_heap_ok()) {
         finish_ota(false);
         return http::send(request, 503, "text/plain",
                           "Prepare the update first so Bluetooth can release memory");
@@ -842,21 +833,9 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
         return true;
     };
 
-    std::vector<uint8_t> chunk(2048);
-    size_t remaining = request->content_len;
-    bool stream_ok = true;
-    while (remaining > 0 && stream_ok) {
-        const int received =
-            httpd_req_recv(request, reinterpret_cast<char*>(chunk.data()),
-                           remaining < chunk.size() ? remaining : chunk.size());
-        if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
-        if (received <= 0) {
-            stream_ok = false;
-            break;
-        }
-        remaining -= static_cast<size_t>(received);
-        stream_ok = reader.feed(chunk.data(), static_cast<size_t>(received), sink);
-    }
+    const bool stream_ok = http::stream_body(request, [&](const uint8_t* data, size_t length) {
+        return reader.feed(data, length, sink);
+    });
 
     if (!stream_ok || !reader.saw_file()) {
         web_firmware_update.abort();
@@ -906,21 +885,9 @@ esp_err_t DeviceWebServer::handle_screensaver_upload(httpd_req_t* request) {
         return bluetooth_manager_->write_screensaver_image_chunk(data, length);
     };
 
-    std::vector<uint8_t> chunk(2048);
-    size_t remaining = request->content_len;
-    bool stream_ok = true;
-    while (remaining > 0 && stream_ok) {
-        const int received =
-            httpd_req_recv(request, reinterpret_cast<char*>(chunk.data()),
-                           remaining < chunk.size() ? remaining : chunk.size());
-        if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
-        if (received <= 0) {
-            stream_ok = false;
-            break;
-        }
-        remaining -= static_cast<size_t>(received);
-        stream_ok = reader.feed(chunk.data(), static_cast<size_t>(received), sink);
-    }
+    const bool stream_ok = http::stream_body(request, [&](const uint8_t* data, size_t length) {
+        return reader.feed(data, length, sink);
+    });
 
     if (!stream_ok || !reader.saw_file()) {
         bluetooth_manager_->abort_screensaver_image_upload();

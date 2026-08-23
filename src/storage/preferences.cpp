@@ -58,19 +58,9 @@ bool Preferences::isKey(const char* key) {
     return nvs_get_blob(handle_, key, nullptr, &length) == ESP_OK;
 }
 
-bool Preferences::putChar(const char* key, int8_t value) {
-    if (!open_ || read_only_ || !key) return false;
-    return nvs_set_i8(handle_, key, value) == ESP_OK && commit();
-}
-
 bool Preferences::putUChar(const char* key, uint8_t value) {
     if (!open_ || read_only_ || !key) return false;
     return nvs_set_u8(handle_, key, value) == ESP_OK && commit();
-}
-
-bool Preferences::putShort(const char* key, int16_t value) {
-    if (!open_ || read_only_ || !key) return false;
-    return nvs_set_i16(handle_, key, value) == ESP_OK && commit();
 }
 
 bool Preferences::putUShort(const char* key, uint16_t value) {
@@ -88,11 +78,6 @@ bool Preferences::putUInt(const char* key, uint32_t value) {
     return nvs_set_u32(handle_, key, value) == ESP_OK && commit();
 }
 
-bool Preferences::putLong64(const char* key, int64_t value) {
-    if (!open_ || read_only_ || !key) return false;
-    return nvs_set_i64(handle_, key, value) == ESP_OK && commit();
-}
-
 bool Preferences::putULong64(const char* key, uint64_t value) {
     if (!open_ || read_only_ || !key) return false;
     return nvs_set_u64(handle_, key, value) == ESP_OK && commit();
@@ -103,10 +88,6 @@ bool Preferences::putBool(const char* key, bool value) {
 }
 
 bool Preferences::putFloat(const char* key, float value) {
-    return putBytes(key, &value, sizeof(value));
-}
-
-bool Preferences::putDouble(const char* key, double value) {
     return putBytes(key, &value, sizeof(value));
 }
 
@@ -210,15 +191,16 @@ std::string Preferences::getString(const char* key, const std::string& default_v
 }
 
 size_t Preferences::getBytes(const char* key, void* buffer, size_t max_length) {
-    const size_t length = getBytesLength(key);
-    if (length == 0 || !buffer || max_length == 0) return length;
-    // Refuse partial reads: a truncated blob would silently corrupt the
-    // statistics snapshot and the calibration record.
-    if (length > max_length) return 0;
+    if (!open_ || !key) return 0;
+    if (!buffer || max_length == 0) return getBytesLength(key);
 
-    size_t read_length = length;
-    if (nvs_get_blob(handle_, key, buffer, &read_length) != ESP_OK) return 0;
-    return read_length;
+    // One lookup: NVS reports ESP_ERR_NVS_INVALID_LENGTH and the required size
+    // when the buffer is too small, which is the partial-read guard we want.
+    // Every float and double is stored as a blob, so this is a hot path.
+    size_t length = max_length;
+    const esp_err_t err = nvs_get_blob(handle_, key, buffer, &length);
+    if (err != ESP_OK) return 0;
+    return length;
 }
 
 size_t Preferences::getBytesLength(const char* key) {

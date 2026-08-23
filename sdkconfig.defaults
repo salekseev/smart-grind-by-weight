@@ -83,8 +83,9 @@ CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=5120
 CONFIG_BT_NIMBLE_LOG_LEVEL_NONE=y
 
 #
-# HTTP server. The device page, JSON API, provisioning portal and the /ws live
-# telemetry socket together register well over the eight default handlers.
+# HTTP server. The handler count, socket budget and task stack are set from
+# src/config/system.h when the server starts; only the request limits and
+# optional features are Kconfig-level.
 #
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_HTTPD_MAX_URI_LEN=512

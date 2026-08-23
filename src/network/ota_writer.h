@@ -32,8 +32,6 @@ public:
     /** Discard a partially written image. */
     void abort();
 
-    bool is_active() const { return handle_ != 0; }
-
     /** Human-readable reason the last operation failed. */
     const char* error() const { return error_; }
 

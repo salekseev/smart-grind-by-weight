@@ -53,6 +53,12 @@ public:
     /** IPv4 address of the setup access point, empty when it is not running. */
     std::string access_point_ip() const;
 
+    /**
+     * Same address in host byte order, for callers that need it numerically.
+     * Returns 0 when the access point is not running.
+     */
+    uint32_t access_point_ip_v4() const;
+
     /** True once the Wi-Fi driver is running in any mode. */
     bool is_radio_started() const { return wifi_started_; }
 
@@ -98,7 +104,6 @@ private:
     static void wifi_event_handler(void* context, esp_event_base_t base, int32_t id, void* data);
     static void ip_event_handler(void* context, esp_event_base_t base, int32_t id, void* data);
 
-    static std::string default_hostname();
     static std::string sanitize_hostname(const std::string& hostname);
 };
 

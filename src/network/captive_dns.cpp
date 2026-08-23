@@ -5,7 +5,7 @@
 #include <cstring>
 #include <vector>
 
-#include "../config/logging.h"
+#include "../config/constants.h"
 
 namespace {
 

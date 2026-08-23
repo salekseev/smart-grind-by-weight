@@ -9,7 +9,7 @@
 
 #include <cstring>
 
-#include "../config/logging.h"
+#include "../config/constants.h"
 
 Filesystem filesystem;
 
@@ -48,6 +48,7 @@ FsFile::~FsFile() {
 
 FsFile::FsFile(FsFile&& other) noexcept
     : file_(other.file_),
+      writable_(other.writable_),
       dir_(other.dir_),
       path_(std::move(other.path_)),
       mount_path_(std::move(other.mount_path_)),
@@ -60,6 +61,7 @@ FsFile& FsFile::operator=(FsFile&& other) noexcept {
     if (this != &other) {
         close();
         file_ = other.file_;
+        writable_ = other.writable_;
         dir_ = other.dir_;
         path_ = std::move(other.path_);
         mount_path_ = std::move(other.mount_path_);
@@ -99,6 +101,7 @@ FsFile FsFile::open_entry(const std::string& mount_path,
         FILE* file = fopen(vfs_path.c_str(), mode);
         if (!file) return handle;
         handle.file_ = file;
+        handle.writable_ = !is_read_mode(mode);
     }
 
     handle.path_ = logical_path;
@@ -155,9 +158,9 @@ size_t FsFile::position() const {
 
 size_t FsFile::size() const {
     if (!file_) return 0;
-    // Flush first: a handle opened for writing would otherwise report the
-    // on-disk length and miss whatever is still buffered.
-    fflush(file_);
+    // Only a write handle needs flushing; on a read stream fflush discards the
+    // buffered read-ahead and forces a re-read from flash.
+    if (writable_) fflush(file_);
     struct stat info = {};
     if (fstat(fileno(file_), &info) != 0) return 0;
     return static_cast<size_t>(info.st_size);

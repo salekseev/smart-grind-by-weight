@@ -1,7 +1,6 @@
 #include "provisioning_service.h"
 
 #include <driver/usb_serial_jtag.h>
-#include <driver/usb_serial_jtag_vfs.h>
 #include <esp_random.h>
 #include <esp_system.h>
 
@@ -52,28 +51,6 @@ loadNetworks();
 </script></body></html>
 )HTML";
 
-/**
- * Route the console through the USB-Serial-JTAG driver.
- *
- * Improv provisioning needs non-blocking reads from the same port the logs go
- * out on, which the register-level default console cannot do. Installing the
- * driver and pointing stdio at it keeps printf and the Improv frames in one
- * ordered stream.
- */
-bool ensure_console_driver() {
-    static bool installed = false;
-    if (installed) return true;
-
-    usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    config.rx_buffer_size = 512;
-    config.tx_buffer_size = 1024;
-    if (usb_serial_jtag_driver_install(&config) != ESP_OK) return false;
-
-    usb_serial_jtag_vfs_use_driver();
-    installed = true;
-    return true;
-}
-
 esp_err_t redirect_to_setup_page(httpd_req_t* request) {
     const std::string location = "http://" + network_manager.access_point_ip() + "/";
     LOG_BLE("[WIFI] Captive portal probe: %s -> %s\n", request->uri, location.c_str());
@@ -93,7 +70,6 @@ void ProvisioningService::init(Preferences* preferences) {
     preferences_ = preferences;
     ap_ssid_ = build_ap_ssid();
     ap_password_ = load_or_create_ap_password();
-    ensure_console_driver();
     initialized_ = true;
 }
 
@@ -212,15 +188,9 @@ void ProvisioningService::start() {
         return;
     }
 
-    const std::string ip = network_manager.access_point_ip();
-    uint32_t address = 0;
-    unsigned octets[4] = {};
-    if (sscanf(ip.c_str(), "%u.%u.%u.%u", &octets[0], &octets[1], &octets[2], &octets[3]) == 4) {
-        address = (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3];
-    }
-    dns_server_.start(address);
+    dns_server_.start(network_manager.access_point_ip_v4());
     active_ = true;
-    LOG_BLE("[WIFI] Setup page: http://%s/\n", ip.c_str());
+    LOG_BLE("[WIFI] Setup page: http://%s/\n", network_manager.access_point_ip().c_str());
 }
 
 void ProvisioningService::stop_dns() {

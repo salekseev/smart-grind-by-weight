@@ -59,19 +59,9 @@ uint32_t DataStreamManager::get_session_list(uint32_t* session_ids, uint32_t max
         if (dir && dir.isDirectory()) {
             FsFile file = dir.openNextFile();
             while (file && list_count < total_sessions) {
-                std::string filename = file.name();
-                bool is_session_file = (strings::starts_with(filename, "session_") || strings::contains(filename, "/session_"))
-                                       && strings::ends_with(filename, ".bin");
-                if (is_session_file) {
-                    // Extract session ID from filename
-                    int start_pos = strings::index_of(filename, '_') + 1;
-                    int end_pos = strings::last_index_of(filename, '.');
-                    if (start_pos > 0 && end_pos > start_pos) {
-                        uint32_t session_id = strings::to_uint32(strings::slice(filename, start_pos, end_pos));
-                        if (session_id > 0) {
-                            session_list[list_count++] = session_id;
-                        }
-                    }
+                const uint32_t session_id = session_id_from_filename(file.name());
+                if (session_id > 0) {
+                    session_list[list_count++] = session_id;
                 }
                 file = dir.openNextFile();
             }

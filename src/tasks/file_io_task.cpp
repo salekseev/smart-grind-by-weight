@@ -72,7 +72,7 @@ bool FileIOTask::start_task() {
     }
     
     if (!file_io_queue) {
-        LOG_BLE("ERROR: FsFile I/O queue not initialized\n");
+        LOG_BLE("ERROR: File I/O queue not initialized\n");
         return false;
     }
     

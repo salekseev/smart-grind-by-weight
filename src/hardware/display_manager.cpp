@@ -10,7 +10,6 @@
 #include <cstring>
 
 #include "../config/constants.h"
-#include "../config/logging.h"
 #include "../storage/filesystem.h"
 #include "../system/timing.h"
 
@@ -169,7 +168,7 @@ void DisplayManager::init() {
     if (!init_panel()) return;
 
     lv_init();
-    lv_tick_set_cb(millis_cb);
+    lv_tick_set_cb(millis);
 
     screen_width = HW_DISPLAY_WIDTH_PX;
     screen_height = HW_DISPLAY_HEIGHT_PX;
@@ -265,7 +264,7 @@ bool DisplayManager::draw_rgb565_file(const char* path, uint16_t width, uint16_t
         return false;
     }
 
-    uint16_t rows_per_chunk = 16;
+    uint16_t rows_per_chunk = HW_DISPLAY_DRAW_BUFFER_ROWS;
     uint16_t* row_buffer = nullptr;
     while (rows_per_chunk >= 4 && row_buffer == nullptr) {
         row_buffer = static_cast<uint16_t*>(
@@ -399,10 +398,6 @@ void DisplayManager::touchpad_read_cb(lv_indev_t* indev, lv_indev_data_t* data) 
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }
-}
-
-uint32_t DisplayManager::millis_cb() {
-    return millis();
 }
 
 void DisplayManager::set_brightness(float brightness) {

@@ -43,6 +43,17 @@ GrindTerminationReason classify_termination_reason(const char* final_result) {
 
 }
 
+uint32_t session_id_from_filename(const std::string& filename) {
+    const bool named_session = strings::starts_with(filename, "session_") ||
+                               strings::contains(filename, "/session_");
+    if (!named_session || !strings::ends_with(filename, ".bin")) return 0;
+
+    const int start = strings::index_of(filename, '_') + 1;
+    const int end = strings::last_index_of(filename, '.');
+    if (start <= 0 || end <= start) return 0;
+    return strings::to_uint32(strings::slice(filename, start, end));
+}
+
 GrindLogger grind_logger;
 
 bool GrindLogger::init(Preferences* prefs) {
@@ -357,11 +368,8 @@ uint32_t GrindLogger::count_sessions_in_flash() const {
             FsFile file = dir.openNextFile();
             
             while (file) {
-                std::string filename = file.name();
-                // Handle both base names and full paths
-                bool is_session_file = (strings::starts_with(filename, "session_") || strings::contains(filename, "/session_"))
-                                       && strings::ends_with(filename, ".bin");
-                if (is_session_file) {
+                const std::string filename = file.name();
+                if (session_id_from_filename(filename) > 0) {
                     count++;
                 }
                 file = dir.openNextFile();
@@ -384,10 +392,8 @@ uint32_t GrindLogger::count_total_events_in_flash() const {
             FsFile file = dir.openNextFile();
             
             while (file) {
-                std::string filename = file.name();
-                bool is_session_file = (strings::starts_with(filename, "session_") || strings::contains(filename, "/session_"))
-                                       && strings::ends_with(filename, ".bin");
-                if (is_session_file) {
+                const std::string filename = file.name();
+                if (session_id_from_filename(filename) > 0) {
                     std::string full_path = strings::starts_with(filename, "/") ? filename : (std::string(GRIND_SESSIONS_DIR) + "/" + filename);
                     FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
                     if (sessionFile) {
@@ -418,10 +424,8 @@ uint32_t GrindLogger::count_total_measurements_in_flash() const {
             FsFile file = dir.openNextFile();
             
             while (file) {
-                std::string filename = file.name();
-                bool is_session_file = (strings::starts_with(filename, "session_") || strings::contains(filename, "/session_"))
-                                       && strings::ends_with(filename, ".bin");
-                if (is_session_file) {
+                const std::string filename = file.name();
+                if (session_id_from_filename(filename) > 0) {
                     std::string full_path = strings::starts_with(filename, "/") ? filename : (std::string(GRIND_SESSIONS_DIR) + "/" + filename);
                     FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
                     if (sessionFile) {
@@ -594,16 +598,10 @@ void GrindLogger::export_sessions_binary_chunk(uint8_t* buffer, size_t buffer_si
                 if (dir && dir.isDirectory()) {
                     FsFile file = dir.openNextFile();
                     while (file && list_count < total_sessions) {
-                        std::string filename = file.name();
-                        if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
-                            // Extract session ID from filename
-                            int start_pos = strings::index_of(filename, '_') + 1;
-                            int end_pos = strings::last_index_of(filename, '.');
-                            if (start_pos > 0 && end_pos > start_pos) {
-                                uint32_t session_id = strings::to_uint32(strings::slice(filename, start_pos, end_pos));
-                                if (session_id > 0 && validate_session_file(session_id)) {
-                                    session_list[list_count++] = session_id;
-                                }
+                        const uint32_t session_id = session_id_from_filename(file.name());
+                        if (session_id > 0) {
+                            if (validate_session_file(session_id)) {
+                                session_list[list_count++] = session_id;
                             }
                         }
                         file = dir.openNextFile();
@@ -749,13 +747,9 @@ void GrindLogger::print_session_data_table() {
             const int MAX_DISPLAY = 10; // Limit display for readability
             
             while (file && displayed < MAX_DISPLAY) {
-                std::string filename = file.name();
-                if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
-                    // Check if filename has proper format
-                    int start_pos = strings::index_of(filename, '_') + 1;
-                    int end_pos = strings::last_index_of(filename, '.');
-                    if (start_pos > 0 && end_pos > start_pos) {
-                        
+                const std::string filename = file.name();
+                if (session_id_from_filename(filename) > 0) {
+                    {
                         // Read session file
                         std::string full_path = std::string(GRIND_SESSIONS_DIR) + "/" + filename;
                         FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
@@ -1053,7 +1047,7 @@ void GrindLogger::print_comprehensive_debug() {
             
             while (dirFile && !found_session) {
                 std::string filename = dirFile.name();
-                if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
+                if (session_id_from_filename(filename) > 0) {
                     std::string full_path = std::string(GRIND_SESSIONS_DIR) + "/" + filename;
                     FsFile file = filesystem.open(full_path.c_str(), "r");
                     if (file) {
@@ -1180,7 +1174,7 @@ void GrindLogger::print_comprehensive_debug() {
 }
 #endif // ENABLE_GRIND_DEBUG
 
-// ========== Individual Session FsFile Management Functions ==========
+// ========== Individual Session File Management Functions ==========
 
 bool GrindLogger::ensure_sessions_directory_exists() {
     // Check if directory exists
@@ -1317,11 +1311,9 @@ void GrindLogger::cleanup_old_session_files() {
     uint32_t list_idx = 0;
     file = dir.openNextFile();
     while (file && list_idx < session_count) {
-        std::string filename = file.name();
-        int start_pos = strings::index_of(filename, '_') + 1;
-        int end_pos = strings::last_index_of(filename, '.');
-        if (start_pos > 0 && end_pos > start_pos) {
-            session_ids[list_idx++] = strings::to_uint32(strings::slice(filename, start_pos, end_pos));
+        const uint32_t session_id = session_id_from_filename(file.name());
+        if (session_id > 0) {
+            session_ids[list_idx++] = session_id;
         }
         file = dir.openNextFile();
     }

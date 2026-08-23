@@ -34,7 +34,6 @@ public:
      */
     bool begin(const char* name, bool read_only = false);
     void end();
-    bool is_open() const { return open_; }
 
     bool clear();
     bool remove(const char* key);
@@ -43,17 +42,16 @@ public:
     // Writes report success, not a byte count. A byte count cannot distinguish
     // failure from successfully storing an empty string, which is exactly what
     // an open Wi-Fi network's password is.
-    bool putChar(const char* key, int8_t value);
+    //
+    // The getters cover more NVS types than the setters because the BLE
+    // diagnostics dump reads back keys of any type this firmware never writes.
     bool putUChar(const char* key, uint8_t value);
-    bool putShort(const char* key, int16_t value);
     bool putUShort(const char* key, uint16_t value);
     bool putInt(const char* key, int32_t value);
     bool putUInt(const char* key, uint32_t value);
-    bool putLong64(const char* key, int64_t value);
     bool putULong64(const char* key, uint64_t value);
     bool putBool(const char* key, bool value);
     bool putFloat(const char* key, float value);
-    bool putDouble(const char* key, double value);
     bool putString(const char* key, const char* value);
     bool putString(const char* key, const std::string& value);
     bool putBytes(const char* key, const void* value, size_t length);

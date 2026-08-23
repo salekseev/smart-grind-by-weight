@@ -1,5 +1,6 @@
 #pragma once
 #include "../storage/preferences.h"
+#include <string>
 #include <cstdint>
 #include <cstring>
 #include "../config/constants.h"
@@ -26,6 +27,15 @@ class Grinder;
 // Flash storage settings
 #define GRIND_SESSIONS_DIR "/sessions"                      // Directory for individual session files
 #define SESSION_FILE_FORMAT "/sessions/session_%lu.bin"    // Individual session file naming format
+
+/**
+ * Session id from a directory entry, or 0 when the name is not a session file.
+ *
+ * Inverts SESSION_FILE_FORMAT. Accepts both a bare entry name ("session_7.bin")
+ * and a full path, because the directory walk yields either depending on the
+ * caller.
+ */
+uint32_t session_id_from_filename(const std::string& filename);
 #define GRIND_LOG_FILE "/grind_sessions.bin"                // Legacy single-file storage (deprecated)
 #define MAX_STORED_SESSIONS_FLASH 10                        // Maximum sessions to keep in flash (configurable)
 
