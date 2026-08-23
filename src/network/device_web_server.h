@@ -55,6 +55,7 @@ private:
     httpd_handle_t server_ = nullptr;
     bool initialized_ = false;
     bool started_ = false;
+    bool start_failure_reported_ = false;
     mutable std::recursive_mutex ota_mutex_;
     OperationInterlock::Token operation_token_ = 0;
     std::atomic<bool> ota_active_{false};

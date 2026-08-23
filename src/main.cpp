@@ -101,7 +101,12 @@ void init_platform_services() {
     ESP_ERROR_CHECK(nvs_status);
 
     ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    // Both the Wi-Fi netifs and the HTTP server attach to the default loop.
+    // ESP_ERR_INVALID_STATE only means someone got here first, which is fine.
+    const esp_err_t loop_status = esp_event_loop_create_default();
+    if (loop_status != ESP_OK && loop_status != ESP_ERR_INVALID_STATE) {
+        ESP_ERROR_CHECK(loop_status);
+    }
 }
 
 void setup() {

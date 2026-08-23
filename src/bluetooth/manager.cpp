@@ -322,7 +322,9 @@ void BluetoothManager::disable() {
     vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_ADVERTISING_DELAY_MS));
 
     log("Bluetooth: Deinitializing BLE stack...\n");
-    NimBLEDevice::deinit(false);
+    // Clear everything: keeping the server alive across a deinit would make the
+    // next enable() add a second copy of every service.
+    NimBLEDevice::deinit(true);
     vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_DEINIT_DELAY_MS));
     ble_server = nullptr;
     ota_service = nullptr;
@@ -342,6 +344,7 @@ void BluetoothManager::disable() {
     sysinfo_performance_characteristic = nullptr;
     sysinfo_hardware_characteristic = nullptr;
     sysinfo_sessions_characteristic = nullptr;
+    sysinfo_diagnostics_characteristic = nullptr;
     debug_stream_active = false;
     
     // Restore normal power settings
