@@ -9,9 +9,9 @@
 //==============================================================================
 // STRING HELPERS
 //==============================================================================
-// The predicates std::string gained in C++20 plus the case and trim operations
-// the firmware needs. Kept here so the device build and the C++17 desktop
-// simulator share one implementation.
+// The predicates std::string gained in C++20, plus the search, slicing and
+// numeric conversions the firmware needs. Kept here so the device build and the
+// C++17 desktop simulator share one implementation.
 
 namespace strings {
 
@@ -49,20 +49,6 @@ inline std::string slice(const std::string& value, int begin, int end) {
     return value.substr(static_cast<size_t>(begin), stop - static_cast<size_t>(begin));
 }
 
-inline std::string to_lower(std::string value) {
-    for (char& c : value) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return value;
-}
-
-inline std::string to_upper(std::string value) {
-    for (char& c : value) {
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    }
-    return value;
-}
-
 /** Leading decimal digits as an unsigned value; 0 when there are none. */
 inline uint32_t to_uint32(const std::string& value) {
     return static_cast<uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
@@ -76,18 +62,6 @@ inline int32_t to_int32(const std::string& value) {
 /** Leading decimal number as a float; 0 when there is none. */
 inline float to_float(const std::string& value) {
     return std::strtof(value.c_str(), nullptr);
-}
-
-/** Replace every occurrence of `needle`, which Arduino's String::replace did. */
-inline std::string replace_all(std::string value, const std::string& needle,
-                              const std::string& replacement) {
-    if (needle.empty()) return value;
-    size_t position = 0;
-    while ((position = value.find(needle, position)) != std::string::npos) {
-        value.replace(position, needle.size(), replacement);
-        position += replacement.size();
-    }
-    return value;
 }
 
 /** Drop leading and trailing ASCII whitespace. */

@@ -2,6 +2,11 @@
 
 ESP32-S3 intelligent coffee scale with grind-by-weight functionality. Features predictive grinding system, LVGL touch UI, and BLE OTA updates. Automatically grinds coffee beans to precise target weights using flow prediction and pulse correction algorithms.
 
+The firmware is a native **ESP-IDF** application (`framework = espidf`, ESP-IDF
+v5.5.1 via the pioarduino platform pin). There is no Arduino core: the entry
+point is `app_main()` in `src/main.cpp`, and every peripheral, storage and
+network API is an ESP-IDF one.
+
 ## Essential Commands
 
 The canonical checkout is `/home/cmossom/src/smart-grind-by-weight` on the
@@ -35,11 +40,46 @@ python3 tools/grinder.py analyze
 
 ## Architecture
 
-**4-Layer Architecture:**
+**Layered Architecture:**
 1. **Hardware Layer** (`src/hardware/`): ESP32-S3 peripheral abstraction
 2. **Control Layer** (`src/controllers/`): Business logic and algorithms  
-3. **System Layer** (`src/system/`): State management
-4. **UI Layer** (`src/ui/`): LVGL touchscreen interface
+3. **System Layer** (`src/system/`): State management, timing, chip info
+4. **Storage Layer** (`src/storage/`): NVS settings store and LittleFS access
+5. **Network Layer** (`src/network/`): Wi-Fi, HTTP server, JSON API, provisioning
+6. **UI Layer** (`src/ui/`): LVGL touchscreen interface
+
+**ESP-IDF build layout:**
+- `CMakeLists.txt` (root) also adds `include/` to every component's search path
+  so LVGL picks up `lv_conf.h`. LVGL's Kconfig otherwise ignores it, which
+  silently drops the fonts the UI needs (`CONFIG_LV_CONF_SKIP=n`).
+- `src/CMakeLists.txt` registers the firmware as the main component.
+- `src/idf_component.yml` pins the managed dependencies: LVGL, littlefs,
+  esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300.
+- `components/` holds the vendored local components: delta, detools, improv.
+- `sdkconfig.defaults` carries CPU, PSRAM, partition, BLE, TLS and FreeRTOS
+  settings. `CONFIG_FREERTOS_HZ=1000` is required: the control loops run on
+  20/25/50 ms periods and would otherwise quantise to 10 ms steps. Generated
+  `sdkconfig.<environment>` files are not checked in; delete one to pick up an
+  edited `sdkconfig.defaults`.
+- Per-environment Kconfig overrides go in `custom_sdkconfig` in `platformio.ini`;
+  the `-D` hardware/debug switches stay in `build_flags`.
+
+**Key native replacements** (no Arduino compatibility layer):
+- Display: `esp_lcd` for both revisions - `esp_lcd_co5300` on V1, the vendored
+  `esp_lcd_sh8601.c` on V2. Same QSPI bus, 40 MHz, `esp_lcd_panel_set_gap` for
+  the panel's 20-pixel column offset.
+- BLE: `esp-nimble-cpp` (`NimBLEDevice`/`NimBLEServer`/`NimBLECharacteristic`).
+- HTTP: `esp_http_server` behind `src/network/http_support.h`, which adapts
+  capturing lambdas into route handlers and provides request/response helpers.
+  `src/network/http_multipart.h` streams the firmware and screensaver uploads.
+- Settings: `Preferences` in `src/storage/preferences.h` over NVS. Its on-flash
+  encoding must not change - an existing grinder would lose calibration and
+  history.
+- Filesystem: `filesystem`/`FsFile` in `src/storage/filesystem.h` over
+  `esp_littlefs`, mounted at `/littlefs` from the `spiffs` partition.
+- Time: `millis()`/`micros()` from `src/system/timing.h` over `esp_timer`.
+  Use `vTaskDelay(pdMS_TO_TICKS(x))` for delays.
+- Strings: `std::string` plus the helpers in `src/system/string_utils.h`.
 
 **Key Components:**
 - **HardwareManager**: Central hardware coordinator
@@ -110,7 +150,8 @@ python3 tools/grinder.py analyze
 * You are an incredibly talented and experienced polyglot with decades of experience in diverse areas such as software architecture, system design, development, UI & UX, copywriting, and more.  
 * When doing UI & UX work, make sure your designs are both aesthetically pleasing, easy to use, and follow UI / UX best practices. You pay attention to interaction patterns, micro-interactions, and are proactive about creating smooth, engaging user interfaces that delight users.   
 * When you receive a task that is very large in scope or too vague, you will first try to break it down into smaller subtasks. If that feels difficult or still leaves you with too many open questions, push back to the user and ask them to consider breaking down the task for you, or guide them through that process. This is important because the larger the task, the more likely it is that things go wrong, wasting time and energy for everyone involved.
-- Touch polling now uses the IDF I2C master driver with ACK checking disabled so idle NACKs don't spam logs. Toggle `DEBUG_SUPPRESS_TOUCH_I2C_ERRORS` to 0 if you need the raw driver output for troubleshooting.
+- Touch polling uses the IDF I2C master driver with ACK checking disabled so idle NACKs don't spam logs. Toggle `DEBUG_SUPPRESS_TOUCH_I2C_ERRORS` to 0 if you need the raw driver output for troubleshooting.
+- Improv serial provisioning installs the USB-Serial-JTAG driver and points stdio at it, so console output and Improv frames share one ordered stream.
 - Use the src/config/constants.h aggregation file to include constants / settings - dont refer to config files directly.
 - When new features have been added and tested always update the docs as well
 - when making a commit, only focus on the end result not the process we went through to get to the end result

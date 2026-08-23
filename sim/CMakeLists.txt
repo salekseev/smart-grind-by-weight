@@ -49,7 +49,6 @@ target_compile_definitions(smart-grind-sim PRIVATE
     NOMINMAX
 )
 target_include_directories(smart-grind-sim PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/platform"
     "${PROJECT_ROOT}/src"
     "${PROJECT_ROOT}/include"
     "${lvgl_SOURCE_DIR}/src"

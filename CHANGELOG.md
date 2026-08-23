@@ -4,6 +4,23 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [Unreleased]
+
+### Platform
+
+- Rebuilt the firmware as a native ESP-IDF application. The Arduino core is
+  gone: Bluetooth now runs on NimBLE, the web interface on the ESP-IDF HTTP
+  server, and Wi-Fi, mDNS, storage and OTA on their ESP-IDF equivalents. Stored
+  settings, grind history and the custom screensaver carry over unchanged, and
+  both the browser and Bluetooth update paths keep working as before. The
+  firmware is roughly 20% smaller and leaves more RAM free for grinding and the
+  interface.
+
+### Display and screensaver
+
+- The startup screensaver image now also appears on V2 grinders, which
+  previously skipped it.
+
 ## [1.5.9] - 2026-09-06
 
 ### Firmware update hotfix

@@ -76,6 +76,29 @@ int hex_value(char c) {
     return -1;
 }
 
+/** Decode application/x-www-form-urlencoded escaping, including '+' as space. */
+std::string url_decode(const std::string& value) {
+    std::string decoded;
+    decoded.reserve(value.size());
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '+') {
+            decoded += ' ';
+        } else if (value[i] == '%' && i + 2 < value.size()) {
+            const int high = hex_value(value[i + 1]);
+            const int low = hex_value(value[i + 2]);
+            if (high < 0 || low < 0) {
+                decoded += value[i];
+            } else {
+                decoded += static_cast<char>((high << 4) | low);
+                i += 2;
+            }
+        } else {
+            decoded += value[i];
+        }
+    }
+    return decoded;
+}
+
 }  // namespace
 
 bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handler handler) {
@@ -252,27 +275,6 @@ bool origin_allowed(httpd_req_t* request) {
     return origin == "http://" + header(request, "Host");
 }
 
-std::string url_decode(const std::string& value) {
-    std::string decoded;
-    decoded.reserve(value.size());
-    for (size_t i = 0; i < value.size(); ++i) {
-        if (value[i] == '+') {
-            decoded += ' ';
-        } else if (value[i] == '%' && i + 2 < value.size()) {
-            const int high = hex_value(value[i + 1]);
-            const int low = hex_value(value[i + 2]);
-            if (high < 0 || low < 0) {
-                decoded += value[i];
-            } else {
-                decoded += static_cast<char>((high << 4) | low);
-                i += 2;
-            }
-        } else {
-            decoded += value[i];
-        }
-    }
-    return decoded;
-}
 
 std::string json_escape(const std::string& value) {
     std::string escaped;

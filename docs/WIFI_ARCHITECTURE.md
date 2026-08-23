@@ -48,7 +48,7 @@ the grinder's smaller feature set.
   preparation expires or the upload fails after Bluetooth was stopped, the
   device cleanly restarts into its existing valid firmware. This restores the
   configured Bluetooth state without leaking heap by rebuilding the retained
-  Arduino BLE server singleton in the same boot.
+  BLE server singleton in the same boot.
 - Do not pre-erase the complete OTA partition or suspend a task while it can hold
   a flash lock. Both patterns can stall an upload or deadlock recovery; use the
   platform Update API's sector-at-a-time path and keep the network/main loop
