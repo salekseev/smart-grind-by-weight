@@ -9,6 +9,7 @@
 
 #include "../config/constants.h"
 #include "../storage/filesystem.h"
+#include "../system/timing.h"
 
 namespace http {
 namespace {
@@ -205,12 +206,23 @@ bool stream_body(httpd_req_t* request, const BodySink& sink) {
     // torn down to free internal RAM.
     std::vector<uint8_t> chunk(2048);
     size_t remaining = request->content_len;
+    uint32_t idle_deadline = millis() + BODY_IDLE_TIMEOUT_MS;
     while (remaining > 0) {
         const int received =
             httpd_req_recv(request, reinterpret_cast<char*>(chunk.data()),
                            remaining < chunk.size() ? remaining : chunk.size());
-        if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (received == HTTPD_SOCK_ERR_TIMEOUT) {
+            // A socket timeout alone is not fatal, but retrying forever would
+            // strand this task and everything waiting on the transfer.
+            if (static_cast<int32_t>(millis() - idle_deadline) >= 0) {
+                LOG_BLE("[WEB] Abandoning stalled request body after %lu bytes\n",
+                        static_cast<unsigned long>(request->content_len - remaining));
+                return false;
+            }
+            continue;
+        }
         if (received <= 0) return false;
+        idle_deadline = millis() + BODY_IDLE_TIMEOUT_MS;
         remaining -= static_cast<size_t>(received);
         if (!sink(chunk.data(), static_cast<size_t>(received))) return false;
     }

@@ -97,7 +97,14 @@ void init_console() {
     usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
     config.rx_buffer_size = 512;
     config.tx_buffer_size = 1024;
-    if (usb_serial_jtag_driver_install(&config) != ESP_OK) return;
+    const esp_err_t err = usb_serial_jtag_driver_install(&config);
+    if (err != ESP_OK) {
+        // Logging still works through the register-level console; only Improv
+        // serial provisioning is lost, and it checks for the driver itself.
+        LOG_BLE("[STARTUP] Console driver unavailable (%s); Improv serial disabled\n",
+                esp_err_to_name(err));
+        return;
+    }
     usb_serial_jtag_vfs_use_driver();
 }
 

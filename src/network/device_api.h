@@ -79,6 +79,7 @@ private:
     static constexpr size_t MAX_CLIENTS = 4;
     static constexpr uint32_t PUBLISH_INTERVAL_MS = 100;
     static constexpr uint8_t MAX_CONSECUTIVE_BACKPRESSURE_SKIPS = 50;
+    static constexpr uint32_t WS_SEND_MUTEX_TIMEOUT_MS = 50;
 
     static constexpr int NO_CLIENT = -1;
 
@@ -105,6 +106,8 @@ private:
     void queue_command(int client_fd, const uint8_t* data, size_t len);
     /** Send one text frame; false when the socket is gone or would block. */
     bool send_text(int client_fd, const std::string& message);
+    /** True when the socket can accept a write without blocking. */
+    static bool socket_writable(int client_fd);
     void send_ack(int client_fd, uint32_t request_id, bool has_request_id,
                   const char* action, bool accepted, const char* reason);
     void send_ack(const Command& command, const char* action, bool accepted,

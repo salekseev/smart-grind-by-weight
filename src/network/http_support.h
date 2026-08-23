@@ -71,9 +71,19 @@ bool read_body(httpd_req_t* request, std::string& body, size_t max_bytes);
 
 /**
  * Pump the request body through `sink` in chunks, for payloads far larger than
- * free memory. Returns false when the socket fails or `sink` aborts.
+ * free memory.
+ *
+ * Gives up when the peer sends nothing for BODY_IDLE_TIMEOUT_MS: a client that
+ * declares a Content-Length and then stalls would otherwise hold the HTTP task
+ * forever, and an abandoned firmware upload leaves the grind and load-cell tasks
+ * suspended until it returns.
+ *
+ * @return false when the socket fails, the peer stalls, or `sink` aborts.
  */
 using BodySink = std::function<bool(const uint8_t* data, size_t length)>;
+
+/** How long a body transfer may stall before it is abandoned. */
+constexpr uint32_t BODY_IDLE_TIMEOUT_MS = 15000;
 bool stream_body(httpd_req_t* request, const BodySink& sink);
 
 /** Look up a URL query parameter. */

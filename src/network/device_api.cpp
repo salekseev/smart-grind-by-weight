@@ -24,6 +24,8 @@
 #include "../system/screensaver_settings.h"
 #include "device_web_server.h"
 #include "gaggimate_status_client.h"
+#include <lwip/sockets.h>
+
 #include "http_support.h"
 #include "../system/string_utils.h"
 
@@ -179,15 +181,33 @@ void DeviceApi::update() {
 
 bool DeviceApi::send_text(int client_fd, const std::string& message) {
     if (!server_ || client_fd == NO_CLIENT || !ws_send_mutex_) return false;
+
+    // httpd_ws_send_frame_async calls send() on the caller's task, so a peer
+    // that has stopped reading would block us for the full socket send timeout.
+    // Publishing runs on the service loop and acknowledgements on the UI task,
+    // so that stall would freeze the display. Skip instead, and let the
+    // backpressure counter evict the client.
+    if (!socket_writable(client_fd)) return false;
+    // Bounded, for the same reason: never queue behind another task's send.
+    if (xSemaphoreTake(ws_send_mutex_, pdMS_TO_TICKS(WS_SEND_MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        return false;
+    }
+
     httpd_ws_frame_t frame = {};
     frame.type = HTTPD_WS_TYPE_TEXT;
     frame.payload = reinterpret_cast<uint8_t*>(const_cast<char*>(message.data()));
     frame.len = message.size();
-
-    xSemaphoreTake(ws_send_mutex_, portMAX_DELAY);
     const esp_err_t err = httpd_ws_send_frame_async(server_, client_fd, &frame);
     xSemaphoreGive(ws_send_mutex_);
     return err == ESP_OK;
+}
+
+bool DeviceApi::socket_writable(int client_fd) {
+    fd_set writable;
+    FD_ZERO(&writable);
+    FD_SET(client_fd, &writable);
+    timeval immediately = {};
+    return select(client_fd + 1, nullptr, &writable, nullptr, &immediately) > 0;
 }
 
 bool DeviceApi::process_commands() {
@@ -332,7 +352,9 @@ esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
             // RFC 6455 section 5.5.2: a PONG carries the PING's payload back.
             frame.type = HTTPD_WS_TYPE_PONG;
         }
-        xSemaphoreTake(ws_send_mutex_, portMAX_DELAY);
+        if (xSemaphoreTake(ws_send_mutex_, pdMS_TO_TICKS(WS_SEND_MUTEX_TIMEOUT_MS)) != pdTRUE) {
+            return ESP_FAIL;
+        }
         const esp_err_t err = httpd_ws_send_frame(request, &frame);
         xSemaphoreGive(ws_send_mutex_);
         return err;

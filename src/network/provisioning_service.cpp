@@ -214,6 +214,10 @@ void ProvisioningService::update_improv_serial() {
         improv_rx_position_ = 0;
     }
 
+    // usb_serial_jtag_read_bytes dereferences the driver object without a null
+    // check, so a failed install at boot would panic here on the first poll.
+    if (!usb_serial_jtag_is_driver_installed()) return;
+
     uint8_t incoming[MAX_BYTES_PER_UPDATE];
     const int available = usb_serial_jtag_read_bytes(incoming, sizeof(incoming), 0);
     for (int index = 0; index < available; ++index) {
@@ -366,6 +370,7 @@ void ProvisioningService::send_improv_response(improv::Command command,
 void ProvisioningService::send_improv_packet(improv::ImprovSerialType type,
                                              const uint8_t* data, size_t length) {
     if (length > 255 || (length > 0 && !data)) return;
+    if (!usb_serial_jtag_is_driver_installed()) return;
     uint8_t frame[267] = {'I', 'M', 'P', 'R', 'O', 'V', improv::IMPROV_SERIAL_VERSION,
                           static_cast<uint8_t>(type), static_cast<uint8_t>(length)};
     if (length > 0) memcpy(frame + 9, data, length);
