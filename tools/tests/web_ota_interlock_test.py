@@ -275,6 +275,18 @@ int main() {
     web.handle_ota_upload(&current);
     assert(probed && current.offset==current.drop_at && current.status==500);
     assert(!web_firmware_update.opened && !web.is_ota_active()); assert_available();
+    // A peer that goes silent mid-image without closing is abandoned once it
+    // has sent nothing for BODY_IDLE_TIMEOUT_MS, releasing the reservation.
+    ready(web); httpd_req_t stalled; load(stalled);
+    stalled.on_recv=[&](httpd_req_t* r) {
+        if (r->offset<200) return;
+        r->timeouts=1; now+=1000; // Every further read times out as time passes.
+    };
+    const uint32_t stall_started=now;
+    web.handle_ota_upload(&stalled);
+    assert(stalled.status==500 && stalled.offset>=200 && stalled.offset<stalled.body.size());
+    assert(now-stall_started>=http::BODY_IDLE_TIMEOUT_MS);
+    assert(!web_firmware_update.opened && !web.is_ota_active()); assert_available();
     // Failed writer begin/write/validation, a non-image and a non-multipart
     // upload each clean up and permit retry.
     for (unsigned failure=0; failure<5; ++failure) {

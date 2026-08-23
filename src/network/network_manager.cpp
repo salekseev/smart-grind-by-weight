@@ -343,11 +343,13 @@ void SmartGrindNetworkManager::begin_connection() {
     if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK) return;
     esp_netif_set_hostname(station_netif_, hostname.c_str());
 
+    // The driver's fields are fixed-size and need no terminator, so copy the
+    // exact length: an SSID may legitimately use all 32 bytes.
     wifi_config_t config = {};
-    strncpy(reinterpret_cast<char*>(config.sta.ssid), ssid.c_str(),
-            sizeof(config.sta.ssid) - 1);
-    strncpy(reinterpret_cast<char*>(config.sta.password), password.c_str(),
-            sizeof(config.sta.password) - 1);
+    memcpy(config.sta.ssid, ssid.data(),
+           std::min(ssid.size(), sizeof(config.sta.ssid)));
+    memcpy(config.sta.password, password.data(),
+           std::min(password.size(), sizeof(config.sta.password)));
     config.sta.threshold.authmode = password.empty() ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_PSK;
     if (esp_wifi_set_config(WIFI_IF_STA, &config) != ESP_OK) return;
 
@@ -371,15 +373,15 @@ bool SmartGrindNetworkManager::start_setup_access_point(const std::string& ssid,
     if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) return false;
 
     wifi_config_t config = {};
-    strncpy(reinterpret_cast<char*>(config.ap.ssid), ssid.c_str(), sizeof(config.ap.ssid) - 1);
-    config.ap.ssid_len = static_cast<uint8_t>(std::min(ssid.length(), sizeof(config.ap.ssid)));
+    memcpy(config.ap.ssid, ssid.data(), std::min(ssid.size(), sizeof(config.ap.ssid)));
+    config.ap.ssid_len = static_cast<uint8_t>(std::min(ssid.size(), sizeof(config.ap.ssid)));
     config.ap.max_connection = 4;
     config.ap.channel = 1;
     if (password.empty()) {
         config.ap.authmode = WIFI_AUTH_OPEN;
     } else {
-        strncpy(reinterpret_cast<char*>(config.ap.password), password.c_str(),
-                sizeof(config.ap.password) - 1);
+        memcpy(config.ap.password, password.data(),
+               std::min(password.size(), sizeof(config.ap.password)));
         config.ap.authmode = WIFI_AUTH_WPA2_PSK;
     }
     if (esp_wifi_set_config(WIFI_IF_AP, &config) != ESP_OK) return false;
