@@ -25,7 +25,7 @@ struct TaskHandles {
 // Inter-task communication queues
 struct TaskQueues {
     QueueHandle_t ui_to_grind_queue;        // UI events → Grind Controller
-    QueueHandle_t file_io_queue;            // Any task → File I/O
+    QueueHandle_t file_io_queue;            // Any task → FsFile I/O
 };
 
 // Task timing metrics for monitoring

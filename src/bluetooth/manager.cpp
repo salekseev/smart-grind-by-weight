@@ -1,10 +1,13 @@
 #include "manager.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/device_info.h"
+#include "../system/timing.h"
 #include "../config/build_info.h"
 #include <algorithm>
 #include <cstdarg>
-#include <Arduino.h>
 #include <esp_system.h>
-#include <LittleFS.h>
+#include "../storage/filesystem.h"
 #include <nvs_flash.h>
 #include <nvs.h>
 #include "../system/performance_monitor.h"
@@ -131,130 +134,130 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     // Some platforms (e.g., macOS/iOS) may ignore this request and keep a lower MTU.
     // That's fine — we also keep chunk sizes small and paced below.
     BLEDevice::setMTU(517);
-    delay(BLE_INIT_STACK_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_STACK_DELAY_MS));
     
     ble_server = BLEDevice::createServer();
-    delay(BLE_INIT_SERVER_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVER_DELAY_MS));
     ble_server->setCallbacks(this);
     
     // Create OTA service
     ota_service = ble_server->createService(BLEUUID(BLE_OTA_SERVICE_UUID), 12);
-    delay(BLE_INIT_SERVICE_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
     
     ota_data_characteristic = ota_service->createCharacteristic(
         BLE_OTA_DATA_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     ota_data_characteristic->setCallbacks(this);
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     ota_control_characteristic = ota_service->createCharacteristic(
         BLE_OTA_CONTROL_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     ota_control_characteristic->setCallbacks(this);
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     ota_status_characteristic = ota_service->createCharacteristic(
         BLE_OTA_STATUS_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     build_number_characteristic = ota_service->createCharacteristic(
         BLE_OTA_BUILD_NUMBER_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ
     );
     build_number_characteristic->setValue(ota_handler.get_build_number().c_str());
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     // Create data service (also used for image upload)
     data_service = ble_server->createService(BLEUUID(BLE_DATA_SERVICE_UUID), 12);
-    delay(BLE_INIT_SERVICE_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
     
     data_control_characteristic = data_service->createCharacteristic(
         BLE_DATA_CONTROL_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     data_control_characteristic->setCallbacks(this);
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     data_transfer_characteristic = data_service->createCharacteristic(
         BLE_DATA_TRANSFER_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
     );
     data_transfer_characteristic->setCallbacks(this);
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     data_status_characteristic = data_service->createCharacteristic(
         BLE_DATA_STATUS_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     // Create debug service (Nordic UART)
     debug_service = ble_server->createService(BLEUUID(BLE_DEBUG_SERVICE_UUID), 8);
-    delay(BLE_INIT_SERVICE_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
 
     debug_rx_characteristic = debug_service->createCharacteristic(
         BLE_DEBUG_RX_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     debug_rx_characteristic->setCallbacks(this);
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
 
     debug_tx_characteristic = debug_service->createCharacteristic(
         BLE_DEBUG_TX_CHAR_UUID,
         BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     // Create system info service
     sysinfo_service = ble_server->createService(BLEUUID(BLE_SYSINFO_SERVICE_UUID), 15);
-    delay(BLE_INIT_SERVICE_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
     
     sysinfo_system_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_SYSTEM_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     sysinfo_performance_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_PERFORMANCE_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     sysinfo_hardware_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_HARDWARE_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     sysinfo_sessions_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_SESSIONS_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
 
     sysinfo_diagnostics_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_DIAGNOSTICS_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     sysinfo_diagnostics_characteristic->setCallbacks(this);
-    delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
 
     ota_service->start();
-    delay(BLE_INIT_START_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
     
     data_service->start();
-    delay(BLE_INIT_START_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
     
     debug_service->start();
-    delay(BLE_INIT_START_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
     
     sysinfo_service->start();
-    delay(BLE_INIT_START_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
 
     BLEAdvertising* advertising = BLEDevice::getAdvertising();
     advertising->addServiceUUID(BLE_OTA_SERVICE_UUID);
@@ -274,7 +277,7 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     sr.setName(BLE_DEVICE_NAME);
     advertising->setScanResponseData(sr);
     
-    delay(BLE_INIT_ADVERTISING_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_ADVERTISING_DELAY_MS));
     
     ble_enabled = true;
     set_ota_status(BLE_OTA_READY);
@@ -319,11 +322,11 @@ void BluetoothManager::disable() {
     device_connected = false;
 
     stop_advertising();
-    delay(BLE_SHUTDOWN_ADVERTISING_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_ADVERTISING_DELAY_MS));
 
     log("Bluetooth: Deinitializing BLE stack...\n");
     BLEDevice::deinit(false);
-    delay(BLE_SHUTDOWN_DEINIT_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_DEINIT_DELAY_MS));
     ble_server = nullptr;
     ota_service = nullptr;
     data_service = nullptr;
@@ -518,7 +521,7 @@ void BluetoothManager::send_next_data_chunk() {
     
     // Check if file transfer is complete
     if (!has_data) {
-        log("Bluetooth Data: File transfer complete for session %lu - sent %d chunks.\n", current_file_session_id, current_chunk);
+        log("Bluetooth Data: FsFile transfer complete for session %lu - sent %d chunks.\n", current_file_session_id, current_chunk);
         data_export_in_progress = false;
         current_chunk = 0;
         current_file_session_id = 0;
@@ -526,7 +529,7 @@ void BluetoothManager::send_next_data_chunk() {
         
         data_stream.close_stream();
         
-        delay(200); // Give the BLE buffer time to clear
+        vTaskDelay(pdMS_TO_TICKS(200)); // Give the BLE buffer time to clear
         set_data_status(BLE_DATA_COMPLETE);
     }
 }
@@ -621,7 +624,7 @@ void BluetoothManager::send_file_list() {
     free(buffer);
     
     // Give the BLE buffer time to transmit the data before sending status
-    delay(100);
+    vTaskDelay(pdMS_TO_TICKS(100));
     
     // Mark transfer complete so client stops waiting
     set_data_status(BLE_DATA_COMPLETE);
@@ -803,7 +806,7 @@ void BluetoothManager::handle_debug_command(BLECharacteristic* characteristic) {
 #if ENABLE_GRIND_DEBUG
                 // Print struct layout debug info immediately upon debug stream activation
                 log("BLE_DEBUG: Printing struct layout debug info...\n");
-                delay(50); // Small delay to ensure previous message is sent
+                vTaskDelay(pdMS_TO_TICKS(50)); // Small delay to ensure previous message is sent
                 grind_logger.print_struct_layout_debug();
                 log("BLE_DEBUG: Struct layout debug info complete\n");
 #else
@@ -938,7 +941,7 @@ void BluetoothManager::onDisconnect(BLEServer* server) {
     debug_stream_active = false;
 
     // Restart advertising for next connection
-    delay(500);
+    vTaskDelay(pdMS_TO_TICKS(500));
     start_advertising();
 }
 
@@ -1156,10 +1159,10 @@ void BluetoothManager::update_system_info() {
     unsigned long uptime_hours = uptime_minutes / 60;
     
     // Get ESP32 system information
-    size_t heap_free = ESP.getFreeHeap();
-    size_t heap_total = ESP.getHeapSize();
+    size_t heap_free = device_info::free_heap_bytes();
+    size_t heap_total = device_info::total_heap_bytes();
     size_t heap_used = heap_total - heap_free;
-    uint32_t flash_size = ESP.getFlashChipSize();
+    uint32_t flash_size = device_info::flash_chip_size_bytes();
     float heap_usage_percent = (float(heap_used) / float(heap_total)) * 100.0f;
     
     snprintf(buffer, sizeof(buffer),
@@ -1184,7 +1187,7 @@ void BluetoothManager::update_system_info() {
         (unsigned int)heap_total,
         heap_usage_percent,
         (unsigned int)flash_size,
-        (unsigned int)ESP.getCpuFreqMHz()
+        (unsigned int)device_info::cpu_frequency_mhz()
     );
     
     sysinfo_system_characteristic->setValue(buffer);
@@ -1395,10 +1398,10 @@ void BluetoothManager::generate_diagnostic_report() {
     send_chunk(buf);
 
     // Section 2: System Runtime
-    size_t heap_free = ESP.getFreeHeap();
-    size_t heap_total = ESP.getHeapSize();
+    size_t heap_free = device_info::free_heap_bytes();
+    size_t heap_total = device_info::total_heap_bytes();
     float heap_used_pct = (float(heap_total - heap_free) / float(heap_total)) * 100.0f;
-    uint32_t flash_size = ESP.getFlashChipSize();
+    uint32_t flash_size = device_info::flash_chip_size_bytes();
 
     const char* driver_type =
 #ifdef MOCK_BUILD
@@ -1416,7 +1419,7 @@ void BluetoothManager::generate_diagnostic_report() {
         "  Driver: %s\n"
         "\n",
         uptime_h, uptime_m, uptime_sec,
-        (unsigned long)ESP.getCpuFreqMHz(),
+        (unsigned long)device_info::cpu_frequency_mhz(),
         (unsigned int)(heap_free / 1024),
         (unsigned int)(heap_total / 1024),
         heap_used_pct,
@@ -1825,8 +1828,8 @@ void BluetoothManager::generate_diagnostic_report() {
     snprintf(buf, sizeof(buf), "[LAST 5 GRIND SESSIONS]\n");
     send_chunk(buf);
 
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
             // Collect all session IDs
             const int MAX_SESSIONS = 100;
@@ -1835,7 +1838,7 @@ void BluetoothManager::generate_diagnostic_report() {
             int count = 0;
 
             if (session_ids) {
-                File file = dir.openNextFile();
+                FsFile file = dir.openNextFile();
                 while (file && count < MAX_SESSIONS) {
                     String filename = file.name();
                     if ((filename.startsWith("session_") || filename.indexOf("/session_") != -1) && filename.endsWith(".bin")) {
@@ -1867,7 +1870,7 @@ void BluetoothManager::generate_diagnostic_report() {
                     char filename[64];
                     snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, session_ids[i]);
 
-                    File sessionFile = LittleFS.open(filename, "r");
+                    FsFile sessionFile = filesystem.open(filename, "r");
                     if (sessionFile) {
                         TimeSeriesSessionHeader header;
                         GrindSession session;
@@ -2031,8 +2034,8 @@ void BluetoothManager::generate_diagnostic_report() {
     snprintf(buf, sizeof(buf), "[AUTOTUNE RESULTS]\n");
     send_chunk(buf);
 
-    if (LittleFS.exists("/autotune.log")) {
-        File autotuneFile = LittleFS.open("/autotune.log", "r");
+    if (filesystem.exists("/autotune.log")) {
+        FsFile autotuneFile = filesystem.open("/autotune.log", "r");
         if (autotuneFile) {
             // Stream file contents in chunks
             while (autotuneFile.available()) {

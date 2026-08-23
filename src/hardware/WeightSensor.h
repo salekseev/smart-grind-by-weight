@@ -4,10 +4,9 @@
 #include "load_cell_driver.h"
 #include "hx711_driver.h"
 #include "../config/constants.h"
-#include <Preferences.h>
+#include "../storage/preferences.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <Arduino.h>
 #include <memory>
 #include <atomic>
 

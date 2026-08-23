@@ -1,10 +1,12 @@
 #include "WeightSensor.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
 #include "../config/constants.h"
 #include "hx711_driver.h"
 #if DEBUG_ENABLE_LOADCELL_MOCK
 #include "mock_hx711_driver.h"
 #endif
-#include <Arduino.h>
 #include <math.h>
 
 /*
@@ -252,7 +254,7 @@ void WeightSensor::tare() {
         update();
 
         // Use load cell update interval from constants.h
-        delay(SYS_TASK_LOADCELL_INTERVAL_MS);
+        vTaskDelay(pdMS_TO_TICKS(SYS_TASK_LOADCELL_INTERVAL_MS));
     }
 
     if (doTare) {
@@ -266,7 +268,7 @@ void WeightSensor::tare() {
         unsigned long sample_start = millis();
         while (raw_filter.get_sample_count() == 0 && millis() - sample_start < 1000) {
             update();
-            delay(SYS_TASK_LOADCELL_INTERVAL_MS);
+            vTaskDelay(pdMS_TO_TICKS(SYS_TASK_LOADCELL_INTERVAL_MS));
         }
     }
 
@@ -299,7 +301,7 @@ void WeightSensor::calibrate(float known_weight) {
     
     unsigned long cal_start = millis();
     while(!update_async() && millis() - cal_start < GRIND_CALIBRATION_TIMEOUT_MS) {
-        delay(10);
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     
     // Calibration using raw ADC data - more precise than calibrated data
@@ -393,7 +395,7 @@ float WeightSensor::get_settled_weight(uint32_t window_ms, float* settle_time_ou
         }
         
         // Use load cell update interval from constants.h
-        delay(SYS_TASK_LOADCELL_INTERVAL_MS);
+        vTaskDelay(pdMS_TO_TICKS(SYS_TASK_LOADCELL_INTERVAL_MS));
     }
     
     // Timeout occurred - return best available measurement

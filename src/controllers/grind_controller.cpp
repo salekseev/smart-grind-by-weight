@@ -1,10 +1,10 @@
 #include "grind_controller.h"
+#include "../system/timing.h"
 #include "grind_events.h"
 #include "../hardware/circular_buffer_math/circular_buffer_math.h"
 #include "../config/constants.h"
 #include "../system/diagnostics_controller.h"
 #include "../system/statistics_manager.h"
-#include <Arduino.h>
 #include <cstdarg>
 #include <cstring>
 #include <cmath>

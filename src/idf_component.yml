@@ -1,0 +1,22 @@
+## Managed dependencies for the Smart Grind firmware.
+## Exact versions are intentional: a silent upgrade of LVGL or the BLE stack
+## changes flash layout and timing behaviour on a device that grinds by weight.
+dependencies:
+  idf:
+    version: ">=5.5"
+
+  # Touch UI
+  lvgl/lvgl: "==9.5.0"
+
+  # Filesystem behind the grind-session log and screensaver image
+  joltwallet/littlefs: "==1.22.3"
+
+  # AMOLED panel controller on the V1 board (V2 uses the vendored SH8601 driver)
+  espressif/esp_lcd_co5300: "==2.1.0"
+
+  # BLE OTA, data export and diagnostics services
+  h2zero/esp-nimble-cpp: "==2.5.0"
+
+  # Network services
+  espressif/mdns: "==1.11.3"
+  espressif/esp_websocket_client: "==1.8.0"

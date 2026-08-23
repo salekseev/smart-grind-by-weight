@@ -7,7 +7,7 @@
 #include <functional>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
-#include <Preferences.h>
+#include "../storage/preferences.h"
 
 #include "../config/constants.h"
 #include "ota_handler.h"

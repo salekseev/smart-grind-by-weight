@@ -1,6 +1,6 @@
 #include "ui_manager.h"
-#include <Arduino.h>
-#include <Preferences.h>
+#include "../system/timing.h"
+#include "../storage/preferences.h"
 #include <algorithm>
 #include <cmath>
 #include "../config/constants.h"

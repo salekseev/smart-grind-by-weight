@@ -1,4 +1,5 @@
 #include "mock_hx711_driver.h"
+#include "../system/timing.h"
 #include "../config/constants.h"
 #include <algorithm>
 #include <cstdint>

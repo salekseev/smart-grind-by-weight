@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
-#include <Preferences.h>
+#include "../storage/preferences.h"
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>

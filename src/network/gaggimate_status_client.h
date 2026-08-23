@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Arduino.h>
 #include <WebSocketsClient.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>

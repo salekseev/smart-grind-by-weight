@@ -1,4 +1,7 @@
 #include "task_manager.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
 #include "../config/build_info.h"
 #include "weight_sampling_task.h"
 #include "grind_control_task.h"
@@ -14,7 +17,6 @@
 #include "../logging/grind_logging.h"
 #include "../config/constants.h"
 #include <esp_task_wdt.h>
-#include <Arduino.h>
 
 // Global instance
 TaskManager task_manager;
@@ -93,7 +95,7 @@ bool TaskManager::create_inter_task_queues() {
         return false;
     }
     
-    // File I/O queue
+    // FsFile I/O queue
     task_queues.file_io_queue = xQueueCreate(SYS_QUEUE_FILE_IO_SIZE, sizeof(FileIORequest));
     if (!task_queues.file_io_queue) {
         LOG_BLE("ERROR: Failed to create file_io_queue\n");
@@ -250,7 +252,7 @@ bool TaskManager::create_file_io_task() {
         return false;
     }
     
-    LOG_BLE("✅ File I/O Task created (Core 1, Priority %d, %dHz)\n", 
+    LOG_BLE("✅ FsFile I/O Task created (Core 1, Priority %d, %dHz)\n", 
             SYS_TASK_PRIORITY_FILE_IO, 1000 / SYS_TASK_FILE_IO_INTERVAL_MS);
     return true;
 }

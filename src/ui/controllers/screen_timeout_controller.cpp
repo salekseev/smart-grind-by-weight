@@ -1,7 +1,7 @@
 #include "screen_timeout_controller.h"
+#include "../../system/timing.h"
 #include "screensaver_controller.h"
 
-#include <Arduino.h>
 
 #include "../../config/constants.h"
 #include "../../config/logging.h"

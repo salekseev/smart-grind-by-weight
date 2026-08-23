@@ -1,5 +1,4 @@
 #include "ota_screen.h"
-#include <Arduino.h>
 #include "../../config/constants.h"
 
 void OTAScreen::create() {

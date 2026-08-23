@@ -1,8 +1,7 @@
 #include "data_stream.h"
 #include "../logging/grind_logging.h"
 #include "../config/constants.h"
-#include <Arduino.h>
-#include <LittleFS.h>
+#include "../storage/filesystem.h"
 
 extern GrindLogger grind_logger;
 
@@ -50,10 +49,10 @@ uint32_t DataStreamManager::get_session_list(uint32_t* session_ids, uint32_t max
     uint32_t list_count = 0;
     
     // Try individual session files first (new approach)
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
-            File file = dir.openNextFile();
+            FsFile file = dir.openNextFile();
             while (file && list_count < total_sessions) {
                 String filename = file.name();
                 bool is_session_file = (filename.startsWith("session_") || filename.indexOf("/session_") != -1)
@@ -108,12 +107,12 @@ bool DataStreamManager::initialize_file_stream(uint32_t session_id) {
     char filename[64];
     snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, session_id);
 
-    if (!LittleFS.exists(filename)) {
+    if (!filesystem.exists(filename)) {
         LOG_BLE("ERROR: Session file %s does not exist\n", filename);
         return false;
     }
 
-    active_file = LittleFS.open(filename, "r");
+    active_file = filesystem.open(filename, "r");
     if (!active_file) {
         LOG_BLE("ERROR: Failed to open session file %s\n", filename);
         return false;

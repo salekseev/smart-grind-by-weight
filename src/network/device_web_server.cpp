@@ -1,8 +1,12 @@
 #include "device_web_server.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include "../system/device_info.h"
+#include "../system/timing.h"
 
-#include <Arduino.h>
 #include <HTTPClient.h>
-#include <LittleFS.h>
+#include "../storage/filesystem.h"
 #include <Update.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -264,8 +268,8 @@ void DeviceWebServer::update() {
     if (reboot_pending_.load() &&
         static_cast<int32_t>(millis() - reboot_at_ms_.load()) >= 0) {
         LOG_BLE("[WEB OTA] Restarting device\n");
-        Serial.flush();
-        ESP.restart();
+    fflush(stdout);
+        esp_restart();
     }
 }
 
@@ -422,10 +426,10 @@ void DeviceWebServer::configure_routes() {
             network_name.c_str(),
             ip_address.c_str(),
             static_cast<unsigned long>(millis()),
-            static_cast<unsigned int>(ESP.getFreeHeap()),
+            static_cast<unsigned int>(device_info::free_heap_bytes()),
             static_cast<unsigned int>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
             static_cast<unsigned int>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-            static_cast<unsigned int>(ESP.getFreePsram()),
+            static_cast<unsigned int>(device_info::free_psram_bytes()),
             device_web_server.is_ota_active() ? "true" : "false",
             device_web_server.is_ota_preparing() ? "true" : "false",
             device_web_server.is_ota_ready() ? "true" : "false",
@@ -453,9 +457,9 @@ void DeviceWebServer::configure_routes() {
         }
 
         std::vector<uint32_t> session_ids;
-        File directory = LittleFS.open(GRIND_SESSIONS_DIR);
+        FsFile directory = filesystem.open(GRIND_SESSIONS_DIR);
         if (directory && directory.isDirectory()) {
-            File entry = directory.openNextFile();
+            FsFile entry = directory.openNextFile();
             while (entry) {
                 const String name = entry.name();
                 const int marker = name.lastIndexOf("session_");
@@ -482,7 +486,7 @@ void DeviceWebServer::configure_routes() {
             if (!grind_logger.validate_stored_session(id)) continue;
             char path[48];
             snprintf(path, sizeof(path), SESSION_FILE_FORMAT, static_cast<unsigned long>(id));
-            File file = LittleFS.open(path, "r");
+            FsFile file = filesystem.open(path, "r");
             TimeSeriesSessionHeader header{};
             GrindSession session{};
             if (!file || file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header) ||
@@ -540,7 +544,7 @@ void DeviceWebServer::configure_routes() {
         }
         char path[48];
         snprintf(path, sizeof(path), SESSION_FILE_FORMAT, static_cast<unsigned long>(id));
-        if (!LittleFS.exists(path) || !grind_logger.validate_stored_session(id)) {
+        if (!filesystem.exists(path) || !grind_logger.validate_stored_session(id)) {
             request->send(404, "application/json", "{\"error\":\"Session not found\"}");
             return;
         }
@@ -615,7 +619,7 @@ void DeviceWebServer::configure_routes() {
             request->send(409, "application/json", "{\"error\":\"Screensaver image is busy\"}");
             return;
         }
-        if (!LittleFS.exists(BLE_IMAGE_FILENAME)) {
+        if (!filesystem.exists(BLE_IMAGE_FILENAME)) {
             request->send(404, "application/json", "{\"error\":\"No custom screensaver is stored\"}");
             return;
         }
@@ -815,7 +819,7 @@ void DeviceWebServer::perform_github_ota(const String& tag) {
         const size_t available = stream->available();
         if (available == 0) {
             if (static_cast<int32_t>(millis() - idle_deadline) >= 0) break;
-            delay(2);
+            vTaskDelay(pdMS_TO_TICKS(2));
             continue;
         }
         const size_t wanted = std::min(available, sizeof(buffer));

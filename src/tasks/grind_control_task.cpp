@@ -1,11 +1,13 @@
 #include "grind_control_task.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
 #include "../config/build_info.h"
 #include "../controllers/grind_controller.h"
 #include "../hardware/WeightSensor.h"
 #include "../hardware/grinder.h"
 #include "../logging/grind_logging.h"
 #include "../config/constants.h"
-#include <Arduino.h>
 #include <esp_task_wdt.h>
 
 // Global instance
@@ -104,7 +106,7 @@ void GrindControlTask::stop_task() {
     if (task_handle) {
         uint32_t timeout_start = millis();
         while (eTaskGetState(task_handle) != eDeleted && millis() - timeout_start < 1000) {
-            delay(10);
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
         task_handle = nullptr;
     }

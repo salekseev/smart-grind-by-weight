@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include <string>
 
 // Writes to the existing USB serial console and retains a bounded recent-log
 // snapshot for read-only Wi-Fi diagnostics. The buffer is intentionally kept
@@ -12,5 +12,5 @@
 #endif
 void diagnostic_log_printf(const char* format, ...) SMART_GRIND_PRINTF_FORMAT;
 void diagnostic_log_write(const char* message);
-String diagnostic_log_snapshot();
+std::string diagnostic_log_snapshot();
 #undef SMART_GRIND_PRINTF_FORMAT

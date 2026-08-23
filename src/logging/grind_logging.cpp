@@ -1,5 +1,8 @@
 #include "grind_logging.h"
-#include <LittleFS.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
+#include "../storage/filesystem.h"
 #include <time.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
@@ -341,10 +344,10 @@ uint32_t GrindLogger::count_sessions_in_flash() const {
     uint32_t count = 0;
     
     // Count individual session files (new approach)
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
-            File file = dir.openNextFile();
+            FsFile file = dir.openNextFile();
             
             while (file) {
                 String filename = file.name();
@@ -368,10 +371,10 @@ uint32_t GrindLogger::count_total_events_in_flash() const {
     uint32_t total_events = 0;
     
     // Count events from individual session files
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
-            File file = dir.openNextFile();
+            FsFile file = dir.openNextFile();
             
             while (file) {
                 String filename = file.name();
@@ -379,7 +382,7 @@ uint32_t GrindLogger::count_total_events_in_flash() const {
                                        && filename.endsWith(".bin");
                 if (is_session_file) {
                     String full_path = filename.startsWith("/") ? filename : (String(GRIND_SESSIONS_DIR) + "/" + filename);
-                    File sessionFile = LittleFS.open(full_path.c_str(), "r");
+                    FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
                     if (sessionFile) {
                         TimeSeriesSessionHeader header;
                         if (sessionFile.read((uint8_t*)&header, sizeof(header)) == sizeof(header)) {
@@ -402,10 +405,10 @@ uint32_t GrindLogger::count_total_measurements_in_flash() const {
     uint32_t total_measurements = 0;
     
     // Count measurements from individual session files
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
-            File file = dir.openNextFile();
+            FsFile file = dir.openNextFile();
             
             while (file) {
                 String filename = file.name();
@@ -413,7 +416,7 @@ uint32_t GrindLogger::count_total_measurements_in_flash() const {
                                        && filename.endsWith(".bin");
                 if (is_session_file) {
                     String full_path = filename.startsWith("/") ? filename : (String(GRIND_SESSIONS_DIR) + "/" + filename);
-                    File sessionFile = LittleFS.open(full_path.c_str(), "r");
+                    FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
                     if (sessionFile) {
                         TimeSeriesSessionHeader header;
                         if (sessionFile.read((uint8_t*)&header, sizeof(header)) == sizeof(header)) {
@@ -468,7 +471,7 @@ void GrindLogger::initialize_session_config() {
 
 
 bool GrindLogger::write_time_series_session_to_flash(const GrindSession& session, const GrindEvent* events, const GrindMeasurement* measurements) {
-    File file = LittleFS.open(GRIND_LOG_FILE, "a");
+    FsFile file = filesystem.open(GRIND_LOG_FILE, "a");
     if (!file) {
         LOG_BLE("Failed to open log file for writing\n");
         return false;
@@ -521,7 +524,7 @@ static void write_uint16_le(uint8_t*& buffer, uint16_t value) {
 
 void GrindLogger::export_sessions_binary_chunk(uint8_t* buffer, size_t buffer_size,  
                                                uint32_t start_pos, uint32_t* next_pos, size_t* actual_size) {
-    static File export_file;
+    static FsFile export_file;
     static uint32_t total_sessions = 0;
     static uint32_t session_idx = 0;
     static uint32_t current_session_id = 0;
@@ -537,7 +540,7 @@ void GrindLogger::export_sessions_binary_chunk(uint8_t* buffer, size_t buffer_si
     if (buffer == nullptr || buffer_size == 0) {
         if (export_file) {
             export_file.close();
-            LOG_DEBUG_PRINTLN("Forced closure of export file handle");
+            LOG_DEBUG_PRINTF("Forced closure of export file handle\n");
         }
         if (session_list) {
             heap_caps_free(session_list);
@@ -579,10 +582,10 @@ void GrindLogger::export_sessions_binary_chunk(uint8_t* buffer, size_t buffer_si
             uint32_t list_count = 0;
             
             // Try individual session files first (new approach)
-            if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-                File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+            if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+                FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
                 if (dir && dir.isDirectory()) {
-                    File file = dir.openNextFile();
+                    FsFile file = dir.openNextFile();
                     while (file && list_count < total_sessions) {
                         String filename = file.name();
                         if (filename.startsWith("session_") && filename.endsWith(".bin")) {
@@ -635,7 +638,7 @@ void GrindLogger::export_sessions_binary_chunk(uint8_t* buffer, size_t buffer_si
         current_session_id = session_list[session_idx];
         char filename[64];
         snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, current_session_id);
-        export_file = LittleFS.open(filename, "r");
+        export_file = filesystem.open(filename, "r");
         if (!export_file) {
             LOG_BLE("ERROR: Failed to open session file: %s\n", filename);
             session_idx++; // Skip this session
@@ -731,10 +734,10 @@ void GrindLogger::print_session_data_table() {
     LOG_BLE("---|---------|---------|--------|------|--------|--------------\n");
     
     // Display data from individual session files
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
-            File file = dir.openNextFile();
+            FsFile file = dir.openNextFile();
             int displayed = 0;
             const int MAX_DISPLAY = 10; // Limit display for readability
             
@@ -748,7 +751,7 @@ void GrindLogger::print_session_data_table() {
                         
                         // Read session file
                         String full_path = String(GRIND_SESSIONS_DIR) + "/" + filename;
-                        File sessionFile = LittleFS.open(full_path.c_str(), "r");
+                        FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
                         if (sessionFile) {
                             TimeSeriesSessionHeader header;
                             GrindSession session_data;
@@ -790,7 +793,7 @@ bool GrindLogger::rotate_flash_log_if_needed() { return true; }
 bool GrindLogger::clear_all_sessions_from_flash() {
     LOG_BLE("Attempting to purge grind history from directory: %s\n", GRIND_SESSIONS_DIR);
  
-    File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
     if (!dir) {
         LOG_BLE("Directory does not exist. Nothing to clear.");
         return true; // Not an error, just nothing to do.
@@ -806,7 +809,7 @@ bool GrindLogger::clear_all_sessions_from_flash() {
     int files_removed = 0;
     int files_failed = 0;
  
-    File file = dir.openNextFile();
+    FsFile file = dir.openNextFile();
     while (file) {
         if (file.isDirectory()) {
             LOG_BLE("Skipping subdirectory: %s\n", file.path());
@@ -818,10 +821,10 @@ bool GrindLogger::clear_all_sessions_from_flash() {
             // Close the file handle before attempting deletion
             file.close();
             
-            if (LittleFS.remove(filePath)) {
+            if (filesystem.remove(filePath)) {
                 files_removed++;
             } else {
-                LOG_DEBUG_PRINTLN("   -> FAILED");
+                LOG_DEBUG_PRINTF("   -> FAILED\n");
                 files_failed++;
                 overall_result = false;
             }
@@ -840,9 +843,9 @@ bool GrindLogger::clear_all_sessions_from_flash() {
     }
  
     if (overall_result) {
-        LOG_DEBUG_PRINTLN("Grind history purge completed successfully.");
+        LOG_DEBUG_PRINTF("Grind history purge completed successfully.\n");
     } else {
-        LOG_DEBUG_PRINTLN("WARNING: Grind history purge completed with some errors.");
+        LOG_DEBUG_PRINTF("WARNING: Grind history purge completed with some errors.\n");
     }
  
     return overall_result;
@@ -1035,17 +1038,17 @@ void GrindLogger::print_comprehensive_debug() {
     LOG_BLE("\n--- READING ACTUAL FLASH DATA ---\n");
     
     // Try individual session files first
-    if (LittleFS.exists(GRIND_SESSIONS_DIR)) {
-        File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    if (filesystem.exists(GRIND_SESSIONS_DIR)) {
+        FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
         if (dir && dir.isDirectory()) {
-            File dirFile = dir.openNextFile();
+            FsFile dirFile = dir.openNextFile();
             bool found_session = false;
             
             while (dirFile && !found_session) {
                 String filename = dirFile.name();
                 if (filename.startsWith("session_") && filename.endsWith(".bin")) {
                     String full_path = String(GRIND_SESSIONS_DIR) + "/" + filename;
-                    File file = LittleFS.open(full_path.c_str(), "r");
+                    FsFile file = filesystem.open(full_path.c_str(), "r");
                     if (file) {
                         LOG_BLE("Reading from: %s\n", filename.c_str());
                         found_session = true;
@@ -1170,13 +1173,13 @@ void GrindLogger::print_comprehensive_debug() {
 }
 #endif // ENABLE_GRIND_DEBUG
 
-// ========== Individual Session File Management Functions ==========
+// ========== Individual Session FsFile Management Functions ==========
 
 bool GrindLogger::ensure_sessions_directory_exists() {
     // Check if directory exists
-    if (!LittleFS.exists(GRIND_SESSIONS_DIR)) {
+    if (!filesystem.exists(GRIND_SESSIONS_DIR)) {
         LOG_BLE("Creating sessions directory...\n");
-        if (!LittleFS.mkdir(GRIND_SESSIONS_DIR)) {
+        if (!filesystem.mkdir(GRIND_SESSIONS_DIR)) {
             LOG_BLE("ERROR: Failed to create sessions directory\n");
             return false;
         }
@@ -1189,7 +1192,7 @@ bool GrindLogger::write_individual_session_file(uint32_t session_id, const Grind
     char filename[64];
     snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, session_id);
     
-    File file = LittleFS.open(filename, "w");
+    FsFile file = filesystem.open(filename, "w");
     if (!file) {
         LOG_BLE("ERROR: Failed to open session file for writing: %s\n", filename);
         return false;
@@ -1218,7 +1221,7 @@ bool GrindLogger::write_individual_session_file(uint32_t session_id, const Grind
         (measurements_size > 0 && file.write((uint8_t*)measurements, measurements_size) != measurements_size)) {
         
         file.close();
-        LittleFS.remove(filename); // Clean up partial file
+        filesystem.remove(filename); // Clean up partial file
         LOG_BLE("ERROR: Failed to write session data to file: %s\n", filename);
         return false;
     }
@@ -1232,11 +1235,11 @@ bool GrindLogger::validate_session_file(uint32_t session_id) {
     char filename[64];
     snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, session_id);
     
-    if (!LittleFS.exists(filename)) {
+    if (!filesystem.exists(filename)) {
         return false;
     }
     
-    File file = LittleFS.open(filename, "r");
+    FsFile file = filesystem.open(filename, "r");
     if (!file) {
         return false;
     }
@@ -1262,8 +1265,8 @@ bool GrindLogger::remove_session_file(uint32_t session_id) {
     char filename[64];
     snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, session_id);
     
-    if (LittleFS.exists(filename)) {
-        bool result = LittleFS.remove(filename);
+    if (filesystem.exists(filename)) {
+        bool result = filesystem.remove(filename);
         if (result) {
             LOG_BLE("Removed old session file: %lu\n", session_id);
         } else {
@@ -1271,11 +1274,11 @@ bool GrindLogger::remove_session_file(uint32_t session_id) {
         }
         return result;
     }
-    return true; // File doesn't exist, so "removal" succeeded
+    return true; // FsFile doesn't exist, so "removal" succeeded
 }
 
 void GrindLogger::cleanup_old_session_files() {
-    File dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    FsFile dir = filesystem.open(GRIND_SESSIONS_DIR);
     if (!dir || !dir.isDirectory()) {
         LOG_BLE("WARNING: Cannot open sessions directory for cleanup.\n");
         return;
@@ -1283,7 +1286,7 @@ void GrindLogger::cleanup_old_session_files() {
 
     // Step 1: Count files and collect session IDs
     uint32_t session_count = 0;
-    File file = dir.openNextFile();
+    FsFile file = dir.openNextFile();
     while (file) {
         session_count++;
         file = dir.openNextFile();
@@ -1303,7 +1306,7 @@ void GrindLogger::cleanup_old_session_files() {
         return;
     }
 
-    dir = LittleFS.open(GRIND_SESSIONS_DIR);
+    dir = filesystem.open(GRIND_SESSIONS_DIR);
     uint32_t list_idx = 0;
     file = dir.openNextFile();
     while (file && list_idx < session_count) {

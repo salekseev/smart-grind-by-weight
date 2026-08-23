@@ -1,4 +1,5 @@
 #include "task_scheduler.h"
+#include "../system/timing.h"
 #include "../config/constants.h"
 
 TaskScheduler::TaskScheduler() {

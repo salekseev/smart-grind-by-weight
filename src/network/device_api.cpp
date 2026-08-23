@@ -1,10 +1,13 @@
 #include "device_api.h"
+#include <esp_system.h>
+#include "../system/device_info.h"
+#include "../system/timing.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cctype>
 #include <cstring>
-#include <LittleFS.h>
+#include "../storage/filesystem.h"
 
 #include "../controllers/grind_controller.h"
 #include "../controllers/profile_controller.h"
@@ -530,7 +533,7 @@ bool DeviceApi::queue_settings_update(AsyncWebServerRequest* request) {
                  ScreensaverSettings::is_valid_display_off_delay(settings.display_off_delay_s) &&
                  (screensaver_style == "orbit" || screensaver_style == "minimal" ||
                   screensaver_style == "blank" ||
-                  (screensaver_style == "custom" && LittleFS.exists(BLE_IMAGE_FILENAME)) ||
+                  (screensaver_style == "custom" && filesystem.exists(BLE_IMAGE_FILENAME)) ||
                   (screensaver_style == "gaggimate" && valid_local_host(gaggimate_host)));
     for (int i = 0; i < 3 && valid; ++i) {
         valid = std::isfinite(settings.profile_weights[i]) &&
@@ -658,7 +661,7 @@ void DeviceApi::refresh_settings_cache() {
     const float freshness = grinder->getFloat(GrindController::PREF_KEY_GRIND_FRESHNESS_HOURS, GRIND_FRESHNESS_DEFAULT_HOURS);
     const ScreensaverTimingSettings screensaver_timing = ScreensaverSettings::load_timing();
     Preferences screensaver_preferences;
-    String screensaver_style = LittleFS.exists(BLE_IMAGE_FILENAME) ? "custom" : "minimal";
+    String screensaver_style = filesystem.exists(BLE_IMAGE_FILENAME) ? "custom" : "minimal";
     if (screensaver_preferences.begin("screensaver", true)) {
         screensaver_style = screensaver_preferences.getString("style", screensaver_style);
         screensaver_preferences.end();
@@ -703,7 +706,7 @@ void DeviceApi::refresh_settings_cache() {
              screensaver_timing.idle_timeout_s, screensaver_timing.startup_timeout_s,
              screensaver_timing.display_off_enabled ? "true" : "false",
              screensaver_timing.display_off_delay_s,
-             screensaver_style.c_str(), LittleFS.exists(BLE_IMAGE_FILENAME) ? "true" : "false",
+             screensaver_style.c_str(), filesystem.exists(BLE_IMAGE_FILENAME) ? "true" : "false",
              gaggimate_host.c_str(),
              read_bool("bluetooth", "startup", true) ? "true" : "false");
     xSemaphoreTake(settings_mutex_, portMAX_DELAY);
@@ -767,6 +770,6 @@ String DeviceApi::build_state_message() {
              target_weight,
              static_cast<unsigned long>(target_time_ms),
              weight, flow, motor_running ? "true" : "false",
-             static_cast<unsigned int>(ESP.getFreeHeap()));
+             static_cast<unsigned int>(device_info::free_heap_bytes()));
     return String(message);
 }

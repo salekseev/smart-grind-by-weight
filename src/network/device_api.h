@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <atomic>
 #include <freertos/FreeRTOS.h>

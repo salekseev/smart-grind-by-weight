@@ -1,6 +1,6 @@
 #include "screensaver_settings.h"
 
-#include <Preferences.h>
+#include "../storage/preferences.h"
 #include <algorithm>
 
 namespace {

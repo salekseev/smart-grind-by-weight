@@ -1,4 +1,7 @@
 #include "provisioning_service.h"
+#include <esp_system.h>
+#include "../system/device_info.h"
+#include "../system/timing.h"
 
 #include <cstring>
 #include <algorithm>
@@ -94,8 +97,8 @@ void ProvisioningService::update() {
 
     if (reboot_pending_ && static_cast<int32_t>(millis() - reboot_at_ms_) >= 0) {
         LOG_BLE("[WIFI] Restarting with saved network credentials\n");
-        Serial.flush();
-        ESP.restart();
+    fflush(stdout);
+        esp_restart();
     }
 }
 
@@ -418,7 +421,7 @@ String ProvisioningService::load_or_create_ap_password() {
 String ProvisioningService::build_ap_ssid() {
     char ssid[32];
     snprintf(ssid, sizeof(ssid), "SmartGrind-%06lx",
-             static_cast<unsigned long>(ESP.getEfuseMac() & 0xFFFFFFULL));
+             static_cast<unsigned long>(device_info::efuse_mac() & 0xFFFFFFULL));
     return String(ssid);
 }
 

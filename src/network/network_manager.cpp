@@ -1,4 +1,7 @@
 #include "network_manager.h"
+#include <esp_system.h>
+#include "../system/device_info.h"
+#include "../system/timing.h"
 
 #include <ESPmDNS.h>
 #include <WiFi.h>
@@ -142,7 +145,7 @@ String SmartGrindNetworkManager::hostname() const {
 String SmartGrindNetworkManager::device_id() const {
     char value[13];
     snprintf(value, sizeof(value), "%012llx",
-             static_cast<unsigned long long>(ESP.getEfuseMac()));
+             static_cast<unsigned long long>(device_info::efuse_mac()));
     return String(value);
 }
 
