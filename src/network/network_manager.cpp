@@ -91,18 +91,15 @@ bool SmartGrindNetworkManager::ensure_wifi_initialized() {
     return true;
 }
 
-bool SmartGrindNetworkManager::apply_mode(wifi_mode_t mode) {
-    if (!ensure_wifi_initialized()) return false;
+bool SmartGrindNetworkManager::start_radio() {
+    if (wifi_started_) return true;
 
-    if (esp_wifi_set_mode(mode) != ESP_OK) return false;
-    if (!wifi_started_) {
-        const esp_err_t err = esp_wifi_start();
-        if (err != ESP_OK) {
-            LOG_BLE("[WIFI] Radio start failed: %s\n", esp_err_to_name(err));
-            return false;
-        }
-        wifi_started_ = true;
+    const esp_err_t err = esp_wifi_start();
+    if (err != ESP_OK) {
+        LOG_BLE("[WIFI] Radio start failed: %s\n", esp_err_to_name(err));
+        return false;
     }
+    wifi_started_ = true;
     return true;
 }
 
@@ -115,10 +112,10 @@ void SmartGrindNetworkManager::wifi_event_handler(void* context, esp_event_base_
         case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
             self->station_got_ip_.store(false);
-            // Reconnection is driven from update() so the retry and setup-mode
-            // timing stays in one place.
-            if (id == WIFI_EVENT_STA_DISCONNECTED &&
-                self->state() == NetworkState::WIFI_CONNECTING) {
+            // Retry within the current attempt; giving up, backing off and
+            // falling through to setup mode all stay in update() so the timing
+            // lives in one place.
+            if (self->state() == NetworkState::WIFI_CONNECTING) {
                 esp_wifi_connect();
             }
             break;
@@ -330,7 +327,10 @@ void SmartGrindNetworkManager::begin_connection() {
     stop_mdns();
     station_got_ip_.store(false);
 
-    if (!apply_mode(WIFI_MODE_STA)) return;
+    // The interface has to be fully configured before the radio starts, so a
+    // WIFI_EVENT_STA_START arriving immediately can act on the right settings.
+    if (!ensure_wifi_initialized()) return;
+    if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK) return;
     esp_netif_set_hostname(station_netif_, hostname.c_str());
 
     wifi_config_t config = {};
@@ -341,8 +341,10 @@ void SmartGrindNetworkManager::begin_connection() {
     config.sta.threshold.authmode = password.empty() ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_PSK;
     if (esp_wifi_set_config(WIFI_IF_STA, &config) != ESP_OK) return;
 
-    esp_wifi_connect();
     set_state(NetworkState::WIFI_CONNECTING);
+    if (!start_radio()) return;
+    // Harmless if WIFI_EVENT_STA_START already issued the connect.
+    esp_wifi_connect();
     LOG_BLE("[WIFI] Connecting to configured network as %s.local\n", hostname.c_str());
 }
 
@@ -351,20 +353,12 @@ bool SmartGrindNetworkManager::start_setup_access_point(const std::string& ssid,
     if (ssid.empty() || (!password.empty() && password.length() < 8)) return false;
 
     stop_mdns();
+    if (!ensure_wifi_initialized()) return false;
     esp_wifi_disconnect();
 
     // AP+STA keeps the setup network available while the station radio scans for
     // nearby routers for the provisioning dropdown.
-    if (!apply_mode(WIFI_MODE_APSTA)) return false;
-
-    esp_netif_ip_info_t ip_info = {};
-    IP4_ADDR(&ip_info.ip, kSetupIp[0], kSetupIp[1], kSetupIp[2], kSetupIp[3]);
-    IP4_ADDR(&ip_info.gw, kSetupIp[0], kSetupIp[1], kSetupIp[2], kSetupIp[3]);
-    IP4_ADDR(&ip_info.netmask, kSetupNetmask[0], kSetupNetmask[1], kSetupNetmask[2],
-             kSetupNetmask[3]);
-    esp_netif_dhcps_stop(access_point_netif_);
-    if (esp_netif_set_ip_info(access_point_netif_, &ip_info) != ESP_OK) return false;
-    if (esp_netif_dhcps_start(access_point_netif_) != ESP_OK) return false;
+    if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) return false;
 
     wifi_config_t config = {};
     strncpy(reinterpret_cast<char*>(config.ap.ssid), ssid.c_str(), sizeof(config.ap.ssid) - 1);
@@ -379,6 +373,18 @@ bool SmartGrindNetworkManager::start_setup_access_point(const std::string& ssid,
         config.ap.authmode = WIFI_AUTH_WPA2_PSK;
     }
     if (esp_wifi_set_config(WIFI_IF_AP, &config) != ESP_OK) return false;
+    if (!start_radio()) return false;
+
+    // The DHCP server has to be restarted around an address change, and that
+    // only works once the interface is up.
+    esp_netif_ip_info_t ip_info = {};
+    IP4_ADDR(&ip_info.ip, kSetupIp[0], kSetupIp[1], kSetupIp[2], kSetupIp[3]);
+    IP4_ADDR(&ip_info.gw, kSetupIp[0], kSetupIp[1], kSetupIp[2], kSetupIp[3]);
+    IP4_ADDR(&ip_info.netmask, kSetupNetmask[0], kSetupNetmask[1], kSetupNetmask[2],
+             kSetupNetmask[3]);
+    esp_netif_dhcps_stop(access_point_netif_);
+    if (esp_netif_set_ip_info(access_point_netif_, &ip_info) != ESP_OK) return false;
+    if (esp_netif_dhcps_start(access_point_netif_) != ESP_OK) return false;
 
     set_state(NetworkState::WIFI_SETUP_AP);
     LOG_BLE("[WIFI] Setup access point started: %s (%s)\n", ssid.c_str(),

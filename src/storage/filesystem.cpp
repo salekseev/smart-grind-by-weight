@@ -155,8 +155,11 @@ size_t FsFile::position() const {
 
 size_t FsFile::size() const {
     if (!file_) return 0;
+    // Flush first: a handle opened for writing would otherwise report the
+    // on-disk length and miss whatever is still buffered.
+    fflush(file_);
     struct stat info = {};
-    if (stat(join_mount(mount_path_, path_).c_str(), &info) != 0) return 0;
+    if (fstat(fileno(file_), &info) != 0) return 0;
     return static_cast<size_t>(info.st_size);
 }
 

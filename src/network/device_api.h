@@ -88,6 +88,9 @@ private:
     ProfileController* profile_controller_ = nullptr;
     QueueHandle_t command_queue_ = nullptr;
     SemaphoreHandle_t settings_mutex_ = nullptr;
+    // Frames are written from the HTTP server task, the UI task and the
+    // service loop, so socket writes have to be serialised.
+    SemaphoreHandle_t ws_send_mutex_ = nullptr;
     std::string settings_json_cache_;
     std::atomic<int> client_fds_[MAX_CLIENTS]{};
     std::atomic<uint8_t> backpressure_skips_[MAX_CLIENTS]{};

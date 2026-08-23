@@ -92,8 +92,8 @@ private:
 
     /** Create the Wi-Fi driver and both netifs once, on first use. */
     bool ensure_wifi_initialized();
-    /** Switch mode, starting the driver if it is not running yet. */
-    bool apply_mode(wifi_mode_t mode);
+    /** Start the radio if it is not running yet. Configure interfaces first. */
+    bool start_radio();
 
     static void wifi_event_handler(void* context, esp_event_base_t base, int32_t id, void* data);
     static void ip_event_handler(void* context, esp_event_base_t base, int32_t id, void* data);
