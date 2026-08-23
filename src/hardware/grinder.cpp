@@ -1,4 +1,5 @@
 #include "grinder.h"
+#include <driver/gpio.h>
 #include <cstdint>
 #include "../system/timing.h"
 #include "../controllers/grind_events.h"
@@ -197,7 +198,7 @@ bool Grinder::is_pulse_complete() {
     // For simplicity, we'll use a transmission done callback approach
     // Since RMT handles the pulse timing in hardware, we can check the GPIO state
     // as a simple completion indicator
-    if (digitalRead(motor_pin) == LOW) {
+    if (gpio_get_level((gpio_num_t)motor_pin) == 0) {
         pulse_active = false;
         grinding = false;
         emit_background_change(false);

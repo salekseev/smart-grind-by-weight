@@ -1,4 +1,5 @@
 #include "device_api.h"
+#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -23,13 +24,15 @@
 #include "../system/screensaver_settings.h"
 #include "device_web_server.h"
 #include "gaggimate_status_client.h"
+#include "http_support.h"
+#include "../system/string_utils.h"
 
 DeviceApi device_api;
 
 namespace {
 bool contains_json_string(const char* json, const char* key, const char* value) {
     if (!json || !key || !value) return false;
-    const String needle = "\"" + String(key) + "\"";
+    const std::string needle = "\"" + std::string(key) + "\"";
     const char* cursor = strstr(json, needle.c_str());
     if (!cursor) return false;
     cursor += needle.length();
@@ -43,7 +46,7 @@ bool contains_json_string(const char* json, const char* key, const char* value) 
 
 bool extract_json_uint(const char* json, const char* key, uint32_t& value) {
     if (!json || !key) return false;
-    const String needle = "\"" + String(key) + "\"";
+    const std::string needle = "\"" + std::string(key) + "\"";
     const char* cursor = strstr(json, needle.c_str());
     if (!cursor) return false;
     cursor += needle.length();
@@ -64,15 +67,8 @@ bool extract_json_uint(const char* json, const char* key, uint32_t& value) {
     return true;
 }
 
-bool websocket_origin_allowed(AsyncWebServerRequest* request) {
-    if (!request || !request->hasHeader("Origin")) return true;
-    const AsyncWebHeader* origin_header = request->getHeader("Origin");
-    if (!origin_header) return false;
-    return origin_header->value() == ("http://" + request->host());
-}
-
-bool valid_local_host(const String& host) {
-    if (host.isEmpty() || host.length() > 63) return false;
+bool valid_local_host(const std::string& host) {
+    if (host.empty() || host.length() > 63) return false;
     for (size_t index = 0; index < host.length(); ++index) {
         const char value = host[index];
         if (!isalnum(static_cast<unsigned char>(value)) && value != '.' && value != '-') {
@@ -117,9 +113,11 @@ const char* api_phase_name(const GrindController& controller) {
 }
 }
 
-void DeviceApi::init(AsyncWebServer* server, HardwareManager* hardware,
-                     GrindController* grind_controller, ProfileController* profile_controller) {
+void DeviceApi::attach_routes(httpd_handle_t server, HardwareManager* hardware,
+                              GrindController* grind_controller,
+                              ProfileController* profile_controller) {
     if (initialized_ || !server || !hardware || !grind_controller || !profile_controller) return;
+    server_ = server;
     hardware_ = hardware;
     grind_controller_ = grind_controller;
     profile_controller_ = profile_controller;
@@ -131,58 +129,60 @@ void DeviceApi::init(AsyncWebServer* server, HardwareManager* hardware,
         profile_controller_ = nullptr;
         return;
     }
-    websocket_.onEvent([this](AsyncWebSocket* ws, AsyncWebSocketClient* client,
-                              AwsEventType type, void* arg, uint8_t* data, size_t len) {
-        handle_event(ws, client, type, arg, data, len);
+    for (auto& slot : client_fds_) slot.store(NO_CLIENT);
+
+    http::websocket_route(server_, "/ws", [this](httpd_req_t* request) {
+        return handle_websocket(request);
     });
-    websocket_.handleHandshake(websocket_origin_allowed);
-    server->addHandler(&websocket_);
-    configure_settings_routes(server);
+    configure_settings_routes();
     refresh_settings_cache();
     initialized_ = true;
 }
 
-bool form_bool(const String& value) {
+bool form_bool(const std::string& value) {
     return value == "1" || value == "true" || value == "on";
 }
 
 void DeviceApi::update() {
     if (!initialized_) return;
     if (settings_cache_dirty_.exchange(false)) refresh_settings_cache();
-    websocket_.cleanupClients(MAX_CLIENTS);
     const uint32_t now = millis();
     if (now - last_publish_ms_ < PUBLISH_INTERVAL_MS) return;
     last_publish_ms_ = now;
 
-    const String message = build_state_message();
+    const std::string message = build_state_message();
     for (size_t index = 0; index < MAX_CLIENTS; ++index) {
-        auto& slot = client_ids_[index];
-        const uint32_t id = slot.load();
-        if (id == 0) {
+        auto& slot = client_fds_[index];
+        const int fd = slot.load();
+        if (fd == NO_CLIENT) {
             backpressure_skips_[index].store(0);
             continue;
         }
-        if (!websocket_.hasClient(id)) {
-            slot.store(0);
+        if (send_text(fd, message)) {
             backpressure_skips_[index].store(0);
             continue;
         }
-        if (!websocket_.availableForWrite(id)) {
-            uint8_t skipped = backpressure_skips_[index].load();
-            if (skipped < MAX_CONSECUTIVE_BACKPRESSURE_SKIPS) ++skipped;
-            backpressure_skips_[index].store(skipped);
-            if (skipped >= MAX_CONSECUTIVE_BACKPRESSURE_SKIPS) {
-                LOG_BLE("[WEB] Closing WebSocket client %lu after sustained backpressure\n",
-                        static_cast<unsigned long>(id));
-                websocket_.close(id, 1013, "client remained too slow");
-                slot.store(0);
-                backpressure_skips_[index].store(0);
-            }
-            continue;
+        // A send only fails when the socket buffer is full or the peer is gone.
+        // Give a slow client a bounded number of skipped frames before closing.
+        uint8_t skipped = backpressure_skips_[index].load();
+        if (skipped < MAX_CONSECUTIVE_BACKPRESSURE_SKIPS) ++skipped;
+        backpressure_skips_[index].store(skipped);
+        if (skipped >= MAX_CONSECUTIVE_BACKPRESSURE_SKIPS) {
+            LOG_BLE("[WEB] Closing WebSocket client %d after sustained backpressure\n", fd);
+            httpd_sess_trigger_close(server_, fd);
+            slot.store(NO_CLIENT);
+            backpressure_skips_[index].store(0);
         }
-        backpressure_skips_[index].store(0);
-        websocket_.text(id, message);
     }
+}
+
+bool DeviceApi::send_text(int client_fd, const std::string& message) {
+    if (!server_ || client_fd == NO_CLIENT) return false;
+    httpd_ws_frame_t frame = {};
+    frame.type = HTTPD_WS_TYPE_TEXT;
+    frame.payload = reinterpret_cast<uint8_t*>(const_cast<char*>(message.data()));
+    frame.len = message.size();
+    return httpd_ws_send_frame_async(server_, client_fd, &frame) == ESP_OK;
 }
 
 bool DeviceApi::process_commands() {
@@ -288,63 +288,84 @@ bool DeviceApi::process_commands() {
     return settings_changed;
 }
 
-void DeviceApi::handle_event(AsyncWebSocket*, AsyncWebSocketClient* client,
-                             AwsEventType type, void* arg, uint8_t* data, size_t len) {
-    if (!client) return;
-    if (type == WS_EVT_CONNECT) {
-        add_client(client);
-        return;
+esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
+    const int client_fd = httpd_req_to_sockfd(request);
+
+    // A GET reaches the handler once, straight after a successful handshake.
+    if (request->method == HTTP_GET) {
+        if (!http::origin_allowed(request)) {
+            httpd_sess_trigger_close(server_, client_fd);
+            return ESP_OK;
+        }
+        add_client(client_fd);
+        return ESP_OK;
     }
-    if (type == WS_EVT_DISCONNECT || type == WS_EVT_ERROR) {
-        remove_client(client->id());
-        return;
+
+    httpd_ws_frame_t frame = {};
+    if (httpd_ws_recv_frame(request, &frame, 0) != ESP_OK) {
+        remove_client(client_fd);
+        return ESP_FAIL;
     }
-    if (type != WS_EVT_DATA || !arg || !data) return;
-    auto* info = static_cast<AwsFrameInfo*>(arg);
-    if (!info->final || info->index != 0 || info->len != len || info->opcode != WS_TEXT || len > 255) {
-        client->close(1009, "single text frames only");
-        return;
+    if (frame.type == HTTPD_WS_TYPE_CLOSE) {
+        remove_client(client_fd);
+        return ESP_OK;
     }
-    queue_command(client->id(), data, len);
+    if (frame.type == HTTPD_WS_TYPE_PING || frame.type == HTTPD_WS_TYPE_PONG) {
+        return ESP_OK;
+    }
+    if (frame.type != HTTPD_WS_TYPE_TEXT || frame.len == 0 || frame.len > 255) {
+        httpd_sess_trigger_close(server_, client_fd);
+        remove_client(client_fd);
+        return ESP_OK;
+    }
+
+    std::vector<uint8_t> payload(frame.len + 1, 0);
+    frame.payload = payload.data();
+    if (httpd_ws_recv_frame(request, &frame, frame.len) != ESP_OK) {
+        remove_client(client_fd);
+        return ESP_FAIL;
+    }
+    queue_command(client_fd, payload.data(), frame.len);
+    return ESP_OK;
 }
 
-void DeviceApi::add_client(AsyncWebSocketClient* client) {
+void DeviceApi::add_client(int client_fd) {
     for (size_t index = 0; index < MAX_CLIENTS; ++index) {
-        auto& slot = client_ids_[index];
-        uint32_t empty = 0;
-        if (slot.compare_exchange_strong(empty, client->id())) {
+        auto& slot = client_fds_[index];
+        int empty = NO_CLIENT;
+        if (slot.compare_exchange_strong(empty, client_fd)) {
             backpressure_skips_[index].store(0);
-            client->keepAlivePeriod(20);
-            client->text(build_state_message());
+            send_text(client_fd, build_state_message());
             return;
         }
     }
-    client->close(1013, "too many clients");
+    LOG_BLE("[WEB] Refusing WebSocket client %d: too many clients\n", client_fd);
+    httpd_sess_trigger_close(server_, client_fd);
 }
 
-void DeviceApi::remove_client(uint32_t client_id) {
+void DeviceApi::remove_client(int client_fd) {
     for (size_t index = 0; index < MAX_CLIENTS; ++index) {
-        auto& slot = client_ids_[index];
-        uint32_t expected = client_id;
-        if (slot.compare_exchange_strong(expected, 0)) {
+        auto& slot = client_fds_[index];
+        int expected = client_fd;
+        if (slot.compare_exchange_strong(expected, NO_CLIENT)) {
             backpressure_skips_[index].store(0);
         }
     }
 }
 
-void DeviceApi::queue_command(uint32_t client_id, const uint8_t* data, size_t len) {
+void DeviceApi::queue_command(int client_fd, const uint8_t* data, size_t len) {
     char json[256];
     memcpy(json, data, len);
     json[len] = '\0';
     uint32_t request_id = 0;
     const bool has_request_id = extract_json_uint(json, "rid", request_id);
     if (!contains_json_string(json, "type", "command")) {
-        send_ack(client_id, request_id, has_request_id, "unknown", false, "invalid message type");
+        send_ack(client_fd, request_id, has_request_id, "unknown", false, "invalid message type");
         return;
     }
 
     Command command{};
-    command.client_id = client_id;
+    command.client_fd = client_fd;
     command.request_id = request_id;
     command.has_request_id = has_request_id;
     command.action = CommandAction::STOP;
@@ -385,7 +406,7 @@ void DeviceApi::queue_command(uint32_t client_id, const uint8_t* data, size_t le
             return;
         }
     } else {
-        send_ack(client_id, request_id, has_request_id, "unknown", false, "unsupported action");
+        send_ack(client_fd, request_id, has_request_id, "unknown", false, "unsupported action");
         return;
     }
 
@@ -394,55 +415,49 @@ void DeviceApi::queue_command(uint32_t client_id, const uint8_t* data, size_t le
     }
 }
 
-void DeviceApi::configure_settings_routes(AsyncWebServer* server) {
-    server->on(AsyncURIMatcher::exact("/api/v1/profile"), HTTP_POST, [this](AsyncWebServerRequest* request) {
-        if (!websocket_origin_allowed(request)) {
-            request->send(403, "application/json", "{\"error\":\"Request origin is not allowed\"}");
-            return;
+void DeviceApi::configure_settings_routes() {
+    http::route(server_, "/api/v1/profile", HTTP_POST, [this](httpd_req_t* request) {
+        if (!http::origin_allowed(request)) {
+            return http::send_error(request, 403, "Request origin is not allowed");
         }
-        queue_profile_selection(request);
+        return queue_profile_selection(request);
     });
-    server->on(AsyncURIMatcher::exact("/api/v1/settings"), HTTP_GET, [this](AsyncWebServerRequest* request) {
-        AsyncWebServerResponse* response = request->beginResponse(200, "application/json", settings_json());
-        response->addHeader("Cache-Control", "no-store");
-        request->send(response);
+    http::route(server_, "/api/v1/settings", HTTP_GET, [this](httpd_req_t* request) {
+        return http::send_json(request, 200, settings_json());
     });
-    server->on(AsyncURIMatcher::exact("/api/v1/settings"), HTTP_POST, [this](AsyncWebServerRequest* request) {
-        if (!websocket_origin_allowed(request)) {
-            request->send(403, "application/json", "{\"error\":\"Request origin is not allowed\"}");
-            return;
+    http::route(server_, "/api/v1/settings", HTTP_POST, [this](httpd_req_t* request) {
+        if (!http::origin_allowed(request)) {
+            return http::send_error(request, 403, "Request origin is not allowed");
         }
-        queue_settings_update(request);
+        return queue_settings_update(request);
     });
 }
 
-bool DeviceApi::queue_profile_selection(AsyncWebServerRequest* request) {
-    if (!request->hasParam("profile", true)) {
-        request->send(400, "application/json", "{\"error\":\"Missing profile\"}");
-        return false;
+esp_err_t DeviceApi::queue_profile_selection(httpd_req_t* request) {
+    std::string form;
+    std::string value;
+    if (!http::read_body(request, form, 256) || !http::form_field(form, "profile", value)) {
+        return http::send_error(request, 400, "Missing profile");
     }
-    const String value = request->getParam("profile", true)->value();
     if (value != "0" && value != "1" && value != "2") {
-        request->send(400, "application/json", "{\"error\":\"Profile must be 0, 1 or 2\"}");
-        return false;
+        return http::send_error(request, 400, "Profile must be 0, 1 or 2");
     }
     if (grind_controller_->get_phase() != GrindPhase::IDLE) {
-        request->send(409, "application/json", "{\"error\":\"Profiles can only be changed while the grinder is idle\"}");
-        return false;
+        return http::send_error(request, 409,
+                                "Profiles can only be changed while the grinder is idle");
     }
 
     Command command{};
+    command.client_fd = NO_CLIENT;
     command.action = CommandAction::SELECT_PROFILE;
-    command.profile_index = value.toInt();
+    command.profile_index = strings::to_int32(value);
     if (xQueueSend(command_queue_, &command, 0) != pdTRUE) {
-        request->send(503, "application/json", "{\"error\":\"Command queue is busy; try again\"}");
-        return false;
+        return http::send_error(request, 503, "Command queue is busy; try again");
     }
-    request->send(202, "application/json", "{\"accepted\":true}");
-    return true;
+    return http::send_json(request, 202, "{\"accepted\":true}");
 }
 
-bool DeviceApi::queue_settings_update(AsyncWebServerRequest* request) {
+esp_err_t DeviceApi::queue_settings_update(httpd_req_t* request) {
     static const char* required[] = {
         "current_profile", "grind_mode", "weight0", "weight1", "weight2",
         "time0", "time1", "time2", "auto_start", "auto_return", "purge_mode",
@@ -452,24 +467,35 @@ bool DeviceApi::queue_settings_update(AsyncWebServerRequest* request) {
         "screensaver_startup_timeout_s", "display_off_enabled", "display_off_delay_s",
         "screensaver_style", "bluetooth_startup"
     };
+    std::string form;
+    if (!http::read_body(request, form, 2048)) {
+        return http::send_error(request, 400, "Could not read the submitted settings");
+    }
     for (const char* field : required) {
-        if (!request->hasParam(field, true)) {
-            request->send(400, "application/json", String("{\"error\":\"Missing field: ") + field + "\"}");
-            return false;
+        if (!http::has_form_field(form, field)) {
+            return http::send_error(request, 400,
+                                    (std::string("Missing field: ") + field).c_str());
         }
     }
 
-    auto value = [request](const char* name) { return request->getParam(name, true)->value(); };
+    auto has = [&form](const char* name) { return http::has_form_field(form, name); };
+    auto value = [&form](const char* name) {
+        std::string result;
+        http::form_field(form, name, result);
+        return result;
+    };
     DeviceSettingsUpdate settings{};
-    settings.current_profile = value("current_profile").toInt();
-    settings.grind_mode = value("grind_mode").toInt();
+    settings.current_profile = strings::to_int32(value("current_profile"));
+    settings.grind_mode = strings::to_int32(value("grind_mode"));
     for (int i = 0; i < 3; ++i) {
-        settings.profile_weights[i] = value((String("weight") + i).c_str()).toFloat();
-        settings.profile_times[i] = value((String("time") + i).c_str()).toFloat();
+        settings.profile_weights[i] =
+            strings::to_float(value(("weight" + std::to_string(i)).c_str()));
+        settings.profile_times[i] =
+            strings::to_float(value(("time" + std::to_string(i)).c_str()));
     }
     settings.auto_start = form_bool(value("auto_start"));
-    if (request->hasParam("auto_start_threshold_g", true)) {
-        settings.auto_start_threshold_g = value("auto_start_threshold_g").toFloat();
+    if (has("auto_start_threshold_g")) {
+        settings.auto_start_threshold_g = strings::to_float(value("auto_start_threshold_g"));
     } else {
         Preferences auto_preferences;
         if (auto_preferences.begin("autogrind", true)) {
@@ -479,29 +505,29 @@ bool DeviceApi::queue_settings_update(AsyncWebServerRequest* request) {
         }
     }
     settings.auto_return = form_bool(value("auto_return"));
-    settings.purge_mode = value("purge_mode").toInt();
-    settings.purge_amount_g = value("purge_amount_g").toFloat();
-    settings.freshness_hours = value("freshness_hours").toFloat();
-    settings.coast_ratio = value("coast_ratio").toFloat();
-    settings.motor_latency_ms = request->hasParam("motor_latency_ms", true)
-                                    ? value("motor_latency_ms").toFloat()
+    settings.purge_mode = strings::to_int32(value("purge_mode"));
+    settings.purge_amount_g = strings::to_float(value("purge_amount_g"));
+    settings.freshness_hours = strings::to_float(value("freshness_hours"));
+    settings.coast_ratio = strings::to_float(value("coast_ratio"));
+    settings.motor_latency_ms = has("motor_latency_ms")
+                                    ? strings::to_float(value("motor_latency_ms"))
                                     : grind_controller_->get_motor_response_latency();
     settings.logging_enabled = form_bool(value("logging_enabled"));
     settings.swipe_enabled = form_bool(value("swipe_enabled"));
-    settings.brightness_percent = value("brightness_percent").toInt();
-    settings.screensaver_brightness_percent = value("screensaver_brightness_percent").toInt();
+    settings.brightness_percent = strings::to_int32(value("brightness_percent"));
+    settings.screensaver_brightness_percent = strings::to_int32(value("screensaver_brightness_percent"));
     settings.screensaver_startup = form_bool(value("screensaver_startup"));
     settings.screensaver_sleep = form_bool(value("screensaver_sleep"));
-    const long screensaver_idle_timeout_s = value("screensaver_idle_timeout_s").toInt();
-    const long screensaver_startup_timeout_s = value("screensaver_startup_timeout_s").toInt();
-    const long display_off_delay_s = value("display_off_delay_s").toInt();
+    const long screensaver_idle_timeout_s = strings::to_int32(value("screensaver_idle_timeout_s"));
+    const long screensaver_startup_timeout_s = strings::to_int32(value("screensaver_startup_timeout_s"));
+    const long display_off_delay_s = strings::to_int32(value("display_off_delay_s"));
     settings.screensaver_idle_timeout_s = static_cast<uint16_t>(screensaver_idle_timeout_s);
     settings.screensaver_startup_timeout_s = static_cast<uint8_t>(screensaver_startup_timeout_s);
     settings.display_off_enabled = form_bool(value("display_off_enabled"));
     settings.display_off_delay_s = static_cast<uint16_t>(display_off_delay_s);
-    const String screensaver_style = value("screensaver_style");
+    const std::string screensaver_style = value("screensaver_style");
     strncpy(settings.screensaver_style, screensaver_style.c_str(), sizeof(settings.screensaver_style) - 1);
-    const String gaggimate_host = request->hasParam("gaggimate_host", true)
+    const std::string gaggimate_host = has("gaggimate_host")
                                       ? value("gaggimate_host")
                                       : gaggimate_status_client.configured_host();
     strncpy(settings.gaggimate_host, gaggimate_host.c_str(), sizeof(settings.gaggimate_host) - 1);
@@ -547,23 +573,19 @@ bool DeviceApi::queue_settings_update(AsyncWebServerRequest* request) {
                 profile_controller_->is_time_valid(settings.profile_times[i]);
     }
     if (!valid) {
-        request->send(400, "application/json", "{\"error\":\"One or more settings are outside the supported range\"}");
-        return false;
+        return http::send_error(request, 400, "One or more settings are outside the supported range");
     }
     if (grind_controller_->is_active()) {
-        request->send(409, "application/json", "{\"error\":\"Stop the grinder before changing settings\"}");
-        return false;
+        return http::send_error(request, 409, "Stop the grinder before changing settings");
     }
 
     Command command{};
     command.action = CommandAction::APPLY_SETTINGS;
     command.settings = settings;
     if (xQueueSend(command_queue_, &command, 0) != pdTRUE) {
-        request->send(503, "application/json", "{\"error\":\"Settings queue is busy; try again\"}");
-        return false;
+        return http::send_error(request, 503, "Settings queue is busy; try again");
     }
-    request->send(202, "application/json", "{\"accepted\":true}");
-    return true;
+    return http::send_json(request, 202, "{\"accepted\":true}");
 }
 
 bool DeviceApi::apply_settings(const DeviceSettingsUpdate& settings) {
@@ -629,10 +651,10 @@ bool DeviceApi::apply_settings(const DeviceSettingsUpdate& settings) {
     return true;
 }
 
-String DeviceApi::settings_json() {
+std::string DeviceApi::settings_json() {
     if (!settings_mutex_) return "{}";
     xSemaphoreTake(settings_mutex_, portMAX_DELAY);
-    const String copy = settings_json_cache_;
+    const std::string copy = settings_json_cache_;
     xSemaphoreGive(settings_mutex_);
     return copy;
 }
@@ -666,12 +688,12 @@ void DeviceApi::refresh_settings_cache() {
     const float freshness = grinder->getFloat(GrindController::PREF_KEY_GRIND_FRESHNESS_HOURS, GRIND_FRESHNESS_DEFAULT_HOURS);
     const ScreensaverTimingSettings screensaver_timing = ScreensaverSettings::load_timing();
     Preferences screensaver_preferences;
-    String screensaver_style = filesystem.exists(BLE_IMAGE_FILENAME) ? "custom" : "minimal";
+    std::string screensaver_style = filesystem.exists(BLE_IMAGE_FILENAME) ? "custom" : "minimal";
     if (screensaver_preferences.begin("screensaver", true)) {
         screensaver_style = screensaver_preferences.getString("style", screensaver_style);
         screensaver_preferences.end();
     }
-    const String gaggimate_host = gaggimate_status_client.configured_host();
+    const std::string gaggimate_host = gaggimate_status_client.configured_host();
 
     char json[2048];
     snprintf(json, sizeof(json),
@@ -719,9 +741,9 @@ void DeviceApi::refresh_settings_cache() {
     xSemaphoreGive(settings_mutex_);
 }
 
-void DeviceApi::send_ack(uint32_t client_id, uint32_t request_id, bool has_request_id,
+void DeviceApi::send_ack(int client_fd, uint32_t request_id, bool has_request_id,
                          const char* action, bool accepted, const char* reason) {
-    if (!websocket_.hasClient(client_id) || !websocket_.availableForWrite(client_id)) return;
+    if (client_fd == NO_CLIENT) return;
     char message[192];
     if (has_request_id) {
         snprintf(message, sizeof(message),
@@ -733,16 +755,16 @@ void DeviceApi::send_ack(uint32_t client_id, uint32_t request_id, bool has_reque
                  "{\"api\":\"v1\",\"type\":\"ack\",\"action\":\"%s\",\"accepted\":%s,\"reason\":\"%s\"}",
                  action, accepted ? "true" : "false", reason);
     }
-    websocket_.text(client_id, message);
+    send_text(client_fd, message);
 }
 
 void DeviceApi::send_ack(const Command& command, const char* action, bool accepted,
                          const char* reason) {
-    send_ack(command.client_id, command.request_id, command.has_request_id,
+    send_ack(command.client_fd, command.request_id, command.has_request_id,
              action, accepted, reason);
 }
 
-String DeviceApi::build_state_message() {
+std::string DeviceApi::build_state_message() {
     WeightSensor* sensor = hardware_->get_weight_sensor();
     Grinder* grinder = hardware_->get_grinder();
     const bool idle = grind_controller_->get_phase() == GrindPhase::IDLE;
@@ -776,5 +798,5 @@ String DeviceApi::build_state_message() {
              static_cast<unsigned long>(target_time_ms),
              weight, flow, motor_running ? "true" : "false",
              static_cast<unsigned int>(device_info::free_heap_bytes()));
-    return String(message);
+    return std::string(message);
 }

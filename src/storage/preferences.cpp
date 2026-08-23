@@ -94,6 +94,18 @@ size_t Preferences::putUInt(const char* key, uint32_t value) {
     return sizeof(value);
 }
 
+size_t Preferences::putLong64(const char* key, int64_t value) {
+    if (!open_ || read_only_ || !key) return 0;
+    if (nvs_set_i64(handle_, key, value) != ESP_OK || !commit()) return 0;
+    return sizeof(value);
+}
+
+size_t Preferences::putULong64(const char* key, uint64_t value) {
+    if (!open_ || read_only_ || !key) return 0;
+    if (nvs_set_u64(handle_, key, value) != ESP_OK || !commit()) return 0;
+    return sizeof(value);
+}
+
 size_t Preferences::putBool(const char* key, bool value) {
     return putUChar(key, value ? 1 : 0);
 }
@@ -156,6 +168,18 @@ uint32_t Preferences::getUInt(const char* key, uint32_t default_value) {
     if (!open_ || !key) return default_value;
     uint32_t value = default_value;
     return nvs_get_u32(handle_, key, &value) == ESP_OK ? value : default_value;
+}
+
+int64_t Preferences::getLong64(const char* key, int64_t default_value) {
+    if (!open_ || !key) return default_value;
+    int64_t value = default_value;
+    return nvs_get_i64(handle_, key, &value) == ESP_OK ? value : default_value;
+}
+
+uint64_t Preferences::getULong64(const char* key, uint64_t default_value) {
+    if (!open_ || !key) return default_value;
+    uint64_t value = default_value;
+    return nvs_get_u64(handle_, key, &value) == ESP_OK ? value : default_value;
 }
 
 bool Preferences::getBool(const char* key, bool default_value) {

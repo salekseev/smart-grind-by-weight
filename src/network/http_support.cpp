@@ -97,6 +97,28 @@ bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handle
     return true;
 }
 
+bool websocket_route(httpd_handle_t server, const char* uri, Handler handler) {
+    if (!server || !uri) return false;
+
+    handler_store().push_back(std::move(handler));
+    httpd_uri_t descriptor = {};
+    descriptor.uri = uri;
+    descriptor.method = HTTP_GET;
+    descriptor.handler = dispatch;
+    descriptor.user_ctx = &handler_store().back();
+    descriptor.is_websocket = true;
+    // Control frames are handled here so a client close can drop its slot.
+    descriptor.handle_ws_control_frames = true;
+
+    const esp_err_t err = httpd_register_uri_handler(server, &descriptor);
+    if (err != ESP_OK) {
+        LOG_BLE("[WEB] Could not register WebSocket %s: %s\n", uri, esp_err_to_name(err));
+        handler_store().pop_back();
+        return false;
+    }
+    return true;
+}
+
 bool not_found(httpd_handle_t server, Handler handler) {
     if (!server) return false;
     // httpd_register_err_handler passes the error code instead of a context
