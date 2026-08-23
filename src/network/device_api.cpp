@@ -125,7 +125,8 @@ void DeviceApi::attach_routes(httpd_handle_t server, HardwareManager* hardware,
     profile_controller_ = profile_controller;
     command_queue_ = xQueueCreate(8, sizeof(Command));
     settings_mutex_ = xSemaphoreCreateMutex();
-    if (!command_queue_ || !settings_mutex_) {
+    ws_send_mutex_ = xSemaphoreCreateMutex();
+    if (!command_queue_ || !settings_mutex_ || !ws_send_mutex_) {
         hardware_ = nullptr;
         grind_controller_ = nullptr;
         profile_controller_ = nullptr;
@@ -181,12 +182,16 @@ void DeviceApi::update() {
 }
 
 bool DeviceApi::send_text(int client_fd, const std::string& message) {
-    if (!server_ || client_fd == NO_CLIENT) return false;
+    if (!server_ || client_fd == NO_CLIENT || !ws_send_mutex_) return false;
     httpd_ws_frame_t frame = {};
     frame.type = HTTPD_WS_TYPE_TEXT;
     frame.payload = reinterpret_cast<uint8_t*>(const_cast<char*>(message.data()));
     frame.len = message.size();
-    return httpd_ws_send_frame_async(server_, client_fd, &frame) == ESP_OK;
+
+    xSemaphoreTake(ws_send_mutex_, portMAX_DELAY);
+    const esp_err_t err = httpd_ws_send_frame_async(server_, client_fd, &frame);
+    xSemaphoreGive(ws_send_mutex_);
+    return err == ESP_OK;
 }
 
 bool DeviceApi::process_commands() {
@@ -380,13 +385,34 @@ esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
         remove_client(client_fd);
         return ESP_FAIL;
     }
-    if (frame.type == HTTPD_WS_TYPE_CLOSE) {
-        remove_client(client_fd);
-        return ESP_OK;
+
+    // This route asks for control frames so a client close releases its slot,
+    // which also makes answering them our responsibility.
+    if (frame.type == HTTPD_WS_TYPE_CLOSE || frame.type == HTTPD_WS_TYPE_PING) {
+        uint8_t control_payload[125] = {};
+        frame.payload = control_payload;
+        if (httpd_ws_recv_frame(request, &frame, sizeof(control_payload)) != ESP_OK) {
+            remove_client(client_fd);
+            return ESP_FAIL;
+        }
+        const bool closing = frame.type == HTTPD_WS_TYPE_CLOSE;
+        if (closing) {
+            remove_client(client_fd);
+            // RFC 6455 section 5.5.1: echo an empty CLOSE.
+            frame.type = HTTPD_WS_TYPE_CLOSE;
+            frame.len = 0;
+            frame.payload = nullptr;
+        } else {
+            // RFC 6455 section 5.5.2: a PONG carries the PING's payload back.
+            frame.type = HTTPD_WS_TYPE_PONG;
+        }
+        xSemaphoreTake(ws_send_mutex_, portMAX_DELAY);
+        const esp_err_t err = httpd_ws_send_frame(request, &frame);
+        xSemaphoreGive(ws_send_mutex_);
+        return err;
     }
-    if (frame.type == HTTPD_WS_TYPE_PING || frame.type == HTTPD_WS_TYPE_PONG) {
-        return ESP_OK;
-    }
+    if (frame.type == HTTPD_WS_TYPE_PONG) return ESP_OK;
+
     if (frame.type != HTTPD_WS_TYPE_TEXT || frame.len == 0 || frame.len > 255) {
         httpd_sess_trigger_close(server_, client_fd);
         remove_client(client_fd);
