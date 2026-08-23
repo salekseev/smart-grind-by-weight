@@ -1,7 +1,10 @@
 #include "gaggimate_status_client.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
 
 #include <HTTPClient.h>
-#include <Preferences.h>
+#include "../storage/preferences.h"
 #include <WiFi.h>
 #include <cctype>
 #include <cmath>

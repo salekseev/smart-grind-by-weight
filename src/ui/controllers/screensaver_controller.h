@@ -1,7 +1,6 @@
 #pragma once
 
 #include <lvgl.h>
-#include <Arduino.h>
 #include <cstdint>
 
 /**

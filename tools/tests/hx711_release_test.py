@@ -21,8 +21,8 @@ class HX711ReleaseTest(unittest.TestCase):
 bool ready=true, released=true, irq_enabled=true;
 unsigned clocks=0;
 uint32_t bits=0;
-unsigned long micros(){return 1000;}
-void delayMicroseconds(unsigned){}
+uint32_t micros(){return 1000;}
+void esp_rom_delay_us(uint32_t){}
 void noInterrupts(){irq_enabled=false;}
 void interrupts(){irq_enabled=true;}
 void digitalWrite(uint8_t,int level){if(level==HIGH) ++clocks;}

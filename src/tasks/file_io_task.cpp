@@ -1,10 +1,12 @@
 #include "file_io_task.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
 #include "../config/build_info.h"
 #include "../logging/grind_logging.h"
 #include "../config/constants.h"
-#include <Arduino.h>
-#include <LittleFS.h>
-#include <Preferences.h>
+#include "../storage/filesystem.h"
+#include "../storage/preferences.h"
 
 // Global instance
 FileIOTask file_io_task;
@@ -51,7 +53,7 @@ void FileIOTask::init(QueueHandle_t io_queue) {
     file_io_queue = io_queue;
     
     // Check initial filesystem availability
-    filesystem_available = LittleFS.begin(true);
+    filesystem_available = filesystem.begin(true);
     if (filesystem_available) {
         LOG_BLE("FileIOTask: LittleFS filesystem available\n");
     } else {
@@ -68,7 +70,7 @@ bool FileIOTask::start_task() {
     }
     
     if (!file_io_queue) {
-        LOG_BLE("ERROR: File I/O queue not initialized\n");
+        LOG_BLE("ERROR: FsFile I/O queue not initialized\n");
         return false;
     }
     
@@ -109,7 +111,7 @@ void FileIOTask::stop_task() {
     if (task_handle) {
         uint32_t timeout_start = millis();
         while (eTaskGetState(task_handle) != eDeleted && millis() - timeout_start < 1000) {
-            delay(10);
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
         task_handle = nullptr;
     }
@@ -298,11 +300,11 @@ void FileIOTask::check_filesystem_health() {
 
 bool FileIOTask::validate_filesystem_access() {
     // Try a simple filesystem operation to validate access
-    File test_file = LittleFS.open("/test_access", "w");
+    FsFile test_file = filesystem.open("/test_access", "w");
     if (test_file) {
         test_file.println("test");
         test_file.close();
-        LittleFS.remove("/test_access");
+        filesystem.remove("/test_access");
         return true;
     }
     return false;
@@ -332,10 +334,10 @@ bool FileIOTask::attempt_filesystem_recovery() {
     LOG_BLE("FileIOTask: Attempting filesystem recovery...\n");
     
     // Try to remount the filesystem
-    LittleFS.end();
+    filesystem.end();
     vTaskDelay(pdMS_TO_TICKS(1000)); // Wait 1 second
     
-    bool recovery_success = LittleFS.begin(true);
+    bool recovery_success = filesystem.begin(true);
     if (recovery_success) {
         filesystem_available = true;
     }

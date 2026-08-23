@@ -1,6 +1,5 @@
 #include "hardware_manager.h"
 #include "../controllers/grind_controller.h"
-#include <Arduino.h>
 #include "../config/constants.h"
 
 void HardwareManager::init() {

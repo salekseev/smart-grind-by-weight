@@ -4,7 +4,6 @@
 #include <string>
 using ReadyScreenText = std::string;
 #else
-#include <Arduino.h>
 using ReadyScreenText = String;
 #endif
 #include "../../config/constants.h"

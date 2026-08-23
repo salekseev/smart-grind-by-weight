@@ -1,4 +1,9 @@
 .pio
+
+# ESP-IDF build outputs
+sdkconfig.waveshare-*
+managed_components/
+dependencies.lock
 .vscode/
 sim/build/
 .cache/

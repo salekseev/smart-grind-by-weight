@@ -1,0 +1,128 @@
+#
+# Smart Grind by Weight - ESP-IDF project configuration
+#
+# Waveshare ESP32-S3-Touch-AMOLED-1.64 (V1 and V2). These defaults reproduce the
+# hardware setup the firmware previously inherited from the Arduino core so the
+# real-time grind control, load-cell sampling and LVGL timings are unchanged.
+#
+
+#
+# Target and CPU
+#
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+#
+# Flash: 16 MB, QIO at 80 MHz
+#
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+#
+# Partition table with three app slots plus the LittleFS and delta-patch areas
+#
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+#
+# Octal PSRAM at 80 MHz (the qio_opi memory type of the Waveshare module).
+# LVGL's draw buffer pool and the grind-session buffers live here.
+#
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+
+#
+# Console on the native USB-Serial-JTAG port, matching the previous
+# ARDUINO_USB_MODE=1 / ARDUINO_USB_CDC_ON_BOOT=1 behaviour.
+#
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+#
+# FreeRTOS. A 1 kHz tick is required: the control loops run on 20 ms, 25 ms and
+# 50 ms periods and would be quantised to 10 ms steps at the IDF default.
+#
+CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=n
+
+#
+# The main task hosts the network/OTA service loop and must stay off core 0,
+# which the Wi-Fi and BLE stacks share.
+#
+CONFIG_ESP_MAIN_TASK_AFFINITY_CPU1=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+#
+# Task watchdog. The weight-sampling and grind-control tasks subscribe
+# explicitly; the idle tasks are excluded because OTA and LVGL rendering
+# legitimately monopolise a core for longer than one watchdog period.
+#
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+#
+# Bluetooth Low Energy via NimBLE, peripheral role only
+#
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=517
+CONFIG_BT_NIMBLE_GATT_MAX_PROCS=8
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=5120
+CONFIG_BT_NIMBLE_LOG_LEVEL_NONE=y
+
+#
+# HTTP server. The device page, JSON API, provisioning portal and the /ws live
+# telemetry socket together register well over the eight default handlers.
+#
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=512
+CONFIG_HTTPD_WS_SUPPORT=y
+CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
+
+#
+# Sockets: HTTP server backlog, the live WebSocket, the captive-portal DNS
+# responder, the GaggiMate client and the OTA download all need one each.
+#
+CONFIG_LWIP_MAX_SOCKETS=16
+CONFIG_LWIP_SO_RCVBUF=y
+
+#
+# TLS for the GitHub release mirror used by on-device firmware updates
+#
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_PEER_CERT=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+
+#
+# Filesystem
+#
+CONFIG_LITTLEFS_MAX_PARTITIONS=1
+CONFIG_LITTLEFS_SPIFFS_COMPAT=n
+CONFIG_LITTLEFS_USE_MTIME=y
+
+#
+# Optimise for speed; the predictive grind controller is latency sensitive.
+#
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_COMPILER_STACK_CHECK_MODE_NONE=y
+
+#
+# Logging: the firmware routes its own diagnostics through the BLE/HTTP log
+# buffer, so keep the IDF logger at warning level to stay off the hot paths.
+#
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+CONFIG_LOG_MAXIMUM_LEVEL_INFO=y

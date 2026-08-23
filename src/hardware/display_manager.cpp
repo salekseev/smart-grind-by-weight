@@ -1,12 +1,12 @@
 #include "display_manager.h"
+#include "../system/timing.h"
 #include "touch_wake_policy.h"
 #if HW_DISPLAY_VARIANT_V2
 #include "esp_lcd_sh8601.h"
 #endif
 #include "../config/constants.h"
 #include "../config/logging.h"
-#include <Arduino.h>
-#include <LittleFS.h>
+#include "../storage/filesystem.h"
 #include <esp_heap_caps.h>
 #if HW_DISPLAY_VARIANT_V2
 #include <driver/spi_master.h>
@@ -231,7 +231,7 @@ bool DisplayManager::draw_rgb565_file(const char* path, uint16_t width, uint16_t
     }
 
     const size_t expected_size = static_cast<size_t>(width) * height * sizeof(uint16_t);
-    File file = LittleFS.open(path, "r");
+    FsFile file = filesystem.open(path, "r");
     if (!file) {
         LOG_BLE("[DISPLAY] RGB565 draw skipped: failed to open %s\n", path);
         return false;

@@ -10,11 +10,13 @@ ROOT = Path(__file__).resolve().parents[2]
 STUBS = r'''
 #include <cstdint>
 #include <climits>
+#include <cstdio>
 #include <string>
 #include <map>
 #include <cassert>
 #include <stdexcept>
 #include "system/operation_interlock.h"
+#include "system/device_info.h"
 #define LOG_BLE(...) ((void)0)
 #define LOG_OTA_DEBUG(...) ((void)0)
 #define BUILD_NUMBER 1
@@ -55,11 +57,12 @@ int esp_task_wdt_reconfigure(const esp_task_wdt_config_t* c) {
 }
 struct Restart : std::exception {};
 void esp_restart() { throw Restart{}; }
-struct { void restart() { esp_restart(); } } ESP;
-struct { void flush() {} } Serial;
-void delay(int) {}
-uint32_t getCpuFrequencyMhz() { return 240; }
-bool setCpuFrequencyMhz(uint32_t) { return true; }
+typedef uint32_t TickType_t;
+#define configTICK_RATE_HZ 1000 // CONFIG_FREERTOS_HZ in sdkconfig.defaults
+#define pdMS_TO_TICKS(ms) ((TickType_t)((TickType_t)(ms) * configTICK_RATE_HZ / 1000U))
+void vTaskDelay(TickType_t) {}
+uint32_t device_info::cpu_frequency_mhz() { return 240; }
+bool device_info::set_cpu_frequency_mhz(uint32_t) { return true; }
 struct Touch { bool disabled=false; void disable(){disabled=true;} void enable(){disabled=false;} } touch;
 struct Display { Touch* get_touch_driver(){return &touch;} } display;
 struct HardwareManager { Display* get_display(){return &display;} } hardware_manager;

@@ -89,7 +89,7 @@ struct Preferences {
     bool getBool(const char*, bool fallback) { return fallback; }
     void end() {}
 };
-unsigned long millis() { return 1000; }
+uint32_t millis() { return 1000; }
 struct Statistics {
     void update_grind_session(float, float, uint8_t, bool, uint32_t) {}
 } statistics_manager;
@@ -100,18 +100,19 @@ struct Node {
     std::vector<std::shared_ptr<Node>> entries;
 };
 size_t write_limit = SIZE_MAX;
-class File {
+class FsFile {
     std::shared_ptr<Node> node;
     size_t pos = 0, entry = 0;
 public:
-    File() = default;
-    explicit File(std::shared_ptr<Node> n) : node(std::move(n)) {}
+    FsFile() = default;
+    explicit FsFile(std::shared_ptr<Node> n) : node(std::move(n)) {}
+    FsFile(FsFile&&) = default; FsFile& operator=(FsFile&&) = default; // move-only, like the real handle
     explicit operator bool() const { return bool(node); }
     bool isDirectory() const { return node && node->directory; }
     const char* name() const { return node->name.c_str(); }
-    File openNextFile() {
-        if (!node || entry >= node->entries.size()) return File();
-        return File(node->entries[entry++]);
+    FsFile openNextFile() {
+        if (!node || entry >= node->entries.size()) return FsFile();
+        return FsFile(node->entries[entry++]);
     }
     size_t size() const { return node ? node->bytes.size() : 0; }
     size_t read(uint8_t* out, size_t count) {
@@ -134,8 +135,8 @@ struct FakeFS {
     bool fail_open = false, fail_remove = false;
     std::vector<std::string> removed;
     bool exists(const char* path) { return std::string(path) == "/sessions" || files.count(path); }
-    File open(const char* path, const char* mode = "r") {
-        if (fail_open) return File();
+    FsFile open(const char* path, const char* mode = "r") {
+        if (fail_open) return FsFile();
         if (std::string(path) == "/sessions") {
             auto dir = std::make_shared<Node>(); dir->name = path; dir->directory = true;
             if (!directory_reads.empty()) {
@@ -143,19 +144,20 @@ struct FakeFS {
             } else {
                 for (auto& pair : files) dir->entries.push_back(pair.second);
             }
-            return File(dir);
+            return FsFile(dir);
         }
         if (std::strcmp(mode, "w") == 0) {
             auto node = std::make_shared<Node>(); node->name = path; files[path] = node;
-            return File(node);
+            return FsFile(node);
         }
-        auto it = files.find(path); return it == files.end() ? File() : File(it->second);
+        auto it = files.find(path); return it == files.end() ? FsFile() : FsFile(it->second);
     }
     bool remove(const char* path) {
         if (fail_remove) return false;
         removed.push_back(path); return files.erase(path) != 0;
     }
-} LittleFS;
+} filesystem;
+auto& LittleFS = filesystem;  // same fake; main() injects faults and inspects files by this name
 #define private public
 ''' + header + "\n" + data_header + r'''
 #undef private

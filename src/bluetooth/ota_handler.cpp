@@ -1,10 +1,13 @@
 #include "ota_handler.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include "../system/device_info.h"
 #include "../config/build_info.h"
 #include "../config/logging.h"
 #include "../hardware/touch_driver.h"
 #include "../hardware/hardware_manager.h"
 #include "../tasks/task_manager.h"
-#include <Arduino.h>
 #include <BLEDevice.h>
 #include <sdkconfig.h>
 #include <climits>
@@ -38,7 +41,7 @@ void OTAHandler::init(Preferences* prefs) {
     
     // Log initial power state
     LOG_BLE("OTA Power: Initial state - CPU: %luMHz, Power mode: %s\n",
-                 (unsigned long)getCpuFrequencyMhz(),
+                 (unsigned long)device_info::cpu_frequency_mhz(),
                  (power_state == NORMAL_POWER) ? "NORMAL" : "REDUCED");
 }
 
@@ -54,18 +57,18 @@ void OTAHandler::reduce_power_for_ble() {
     if (power_state == BLE_REDUCED_POWER) return;
     
     // Store current CPU frequency
-    normal_cpu_freq_mhz = getCpuFrequencyMhz();
+    normal_cpu_freq_mhz = device_info::cpu_frequency_mhz();
     
     LOG_BLE("OTA Power: Switching from %luMHz to %dMHz\n", 
                  (unsigned long)normal_cpu_freq_mhz, BLE_REDUCED_CPU_FREQ_MHZ);
     
     // Lower CPU frequency for power savings
-    if (!setCpuFrequencyMhz(BLE_REDUCED_CPU_FREQ_MHZ)) {
+    if (!device_info::set_cpu_frequency_mhz(BLE_REDUCED_CPU_FREQ_MHZ)) {
         LOG_BLE("OTA Power: WARNING - Failed to reduce CPU frequency\n");
     }
     
     // Verify the frequency change
-    uint32_t actual_freq = getCpuFrequencyMhz();
+    uint32_t actual_freq = device_info::cpu_frequency_mhz();
     if (actual_freq != BLE_REDUCED_CPU_FREQ_MHZ) {
         LOG_BLE("OTA Power: WARNING - CPU frequency is %luMHz, expected %dMHz\n", 
                      (unsigned long)actual_freq, BLE_REDUCED_CPU_FREQ_MHZ);
@@ -82,16 +85,16 @@ void OTAHandler::restore_normal_power() {
                  (unsigned long)normal_cpu_freq_mhz);
     
     // Restore original CPU frequency
-    if (!setCpuFrequencyMhz(normal_cpu_freq_mhz)) {
+    if (!device_info::set_cpu_frequency_mhz(normal_cpu_freq_mhz)) {
         LOG_BLE("OTA Power: WARNING - Failed to restore CPU frequency\n");
         // Try to set to default frequency as fallback
-        if (!setCpuFrequencyMhz(BLE_NORMAL_CPU_FREQ_MHZ)) {
+        if (!device_info::set_cpu_frequency_mhz(BLE_NORMAL_CPU_FREQ_MHZ)) {
             LOG_BLE("OTA Power: ERROR - Failed to set fallback CPU frequency\n");
         }
     }
     
     // Verify the frequency change
-    uint32_t actual_freq = getCpuFrequencyMhz();
+    uint32_t actual_freq = device_info::cpu_frequency_mhz();
     if (actual_freq != normal_cpu_freq_mhz) {
         LOG_BLE("OTA Power: WARNING - CPU frequency is %luMHz, expected %luMHz\n", 
                      (unsigned long)actual_freq, (unsigned long)normal_cpu_freq_mhz);
@@ -255,27 +258,27 @@ bool OTAHandler::complete_ota() {
         
         // Restart device
         LOG_OTA_DEBUG("Flushing Serial before restart...\n");
-        Serial.flush();
-        delay(100);
+    fflush(stdout);
+        vTaskDelay(pdMS_TO_TICKS(100));
         
         // Kamikaze restart - no graceful cleanup needed
         LOG_BLE("OTA: Kamikaze restart in 3...2...1\n");
         LOG_OTA_DEBUG("Final countdown before esp_restart()...\n");
-        Serial.flush();
-        delay(100);
+    fflush(stdout);
+        vTaskDelay(pdMS_TO_TICKS(100));
         
         LOG_OTA_DEBUG("Calling esp_restart()...\n");
-        Serial.flush();
+    fflush(stdout);
         esp_restart();
         
         // Fallback restart methods
-        LOG_OTA_DEBUG("esp_restart() failed, trying ESP.restart()...\n");
-        Serial.flush();
-        ESP.restart();
+        LOG_OTA_DEBUG("esp_restart() failed, trying esp_restart()...\n");
+    fflush(stdout);
+        esp_restart();
         
-        LOG_OTA_DEBUG("ESP.restart() failed, entering infinite loop...\n");
-        Serial.flush();
-        while(true) delay(1000);
+        LOG_OTA_DEBUG("esp_restart() failed, entering infinite loop...\n");
+    fflush(stdout);
+        while(true) vTaskDelay(pdMS_TO_TICKS(1000));
     } else {
         current_status = BLE_OTA_ERROR;
         LOG_BLE("OTA: Finalization failed\n");
@@ -409,7 +412,7 @@ bool OTAHandler::finalize_update() {
     
     // Apply the delta patch
     LOG_OTA_DEBUG("Calling delta_check_and_apply() with size=%lu...\n", (unsigned long)patch_size);
-    Serial.flush();
+    fflush(stdout);
     int result = delta_check_and_apply(patch_size, &opts);
     LOG_OTA_DEBUG("delta_check_and_apply() returned: %d\n", result);
     if (result < 0) {

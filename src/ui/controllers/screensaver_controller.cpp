@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <LittleFS.h>
-#include <Preferences.h>
+#include "../../storage/filesystem.h"
+#include "../../storage/preferences.h"
 #include <esp_heap_caps.h>
 
 ScreensaverController::ScreensaverController()
@@ -33,7 +33,7 @@ bool ScreensaverController::has_image() const {
 }
 
 bool ScreensaverController::has_custom_image() const {
-    File image = LittleFS.open(BLE_IMAGE_FILENAME, "r");
+    FsFile image = filesystem.open(BLE_IMAGE_FILENAME, "r");
     const bool valid = image && image.size() == BLE_IMAGE_EXPECTED_SIZE;
     if (image) {
         image.close();
@@ -266,7 +266,7 @@ bool ScreensaverController::load_image() {
         return false;
     }
 
-    File f = LittleFS.open(BLE_IMAGE_FILENAME, "r");
+    FsFile f = filesystem.open(BLE_IMAGE_FILENAME, "r");
     if (!f) {
         LOG_BLE("Screensaver: Failed to open image file\n");
         free_image();

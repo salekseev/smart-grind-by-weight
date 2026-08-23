@@ -2,7 +2,6 @@
 
 #include "../config/constants.h"
 #include "load_cell_driver.h"
-#include <Arduino.h>
 #include <math.h>
 
 /**

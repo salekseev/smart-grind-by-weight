@@ -29,7 +29,7 @@
 #define SYS_TASK_GRIND_CONTROL_INTERVAL_MS 20                                  // Grind controller update interval (50Hz) - Core 0
 #define SYS_TASK_UI_INTERVAL_MS 16                                             // UI rendering frequency (60Hz) - Core 1  
 #define SYS_TASK_BLUETOOTH_INTERVAL_MS 20                                      // Bluetooth handling frequency (50Hz) - Core 1
-#define SYS_TASK_FILE_IO_INTERVAL_MS 100                                       // File I/O operations frequency (10Hz) - Core 1
+#define SYS_TASK_FILE_IO_INTERVAL_MS 100                                       // FsFile I/O operations frequency (10Hz) - Core 1
 
 // Task Stack Sizes (bytes) - Increased for BLE_LOG overhead and complex operations
 #define SYS_TASK_WEIGHT_SAMPLING_STACK_SIZE 4096                               // 4KB stack for weight sampling (was 2KB, increased for BLE_LOG)
@@ -48,7 +48,7 @@
 
 // Inter-Task Communication Queue Sizes
 #define SYS_QUEUE_UI_TO_GRIND_SIZE 5                                           // UI events to grind controller
-#define SYS_QUEUE_FILE_IO_SIZE 20                                              // File I/O operation requests
+#define SYS_QUEUE_FILE_IO_SIZE 20                                              // FsFile I/O operation requests
 
 // Legacy task scheduler intervals (deprecated - kept for compatibility)
 #define SYS_TASK_LOADCELL_INTERVAL_MS 20                                       // Load cell polling frequency (50Hz)

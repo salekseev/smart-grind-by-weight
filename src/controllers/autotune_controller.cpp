@@ -1,5 +1,5 @@
 #include "autotune_controller.h"
-#include <Arduino.h>
+#include "../system/timing.h"
 #include <cmath>
 #include <cstring>
 #include <cstdarg>
@@ -92,8 +92,8 @@ bool AutoTuneController::start() {
     progress.previous_latency_ms = grind_controller->get_motor_response_latency();
 
     // Initialize autotune log file
-    LittleFS.remove("/autotune.log");
-    autotune_log_file = LittleFS.open("/autotune.log", "w");
+    filesystem.remove("/autotune.log");
+    autotune_log_file = filesystem.open("/autotune.log", "w");
     if (autotune_log_file) {
         autotune_log_file.println("=== Autotune Started ===");
         autotune_log_file.printf("Timestamp: %lums\n", millis());

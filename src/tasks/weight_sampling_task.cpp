@@ -1,9 +1,11 @@
 #include "weight_sampling_task.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../system/timing.h"
 #include "../config/build_info.h"
 #include "../hardware/WeightSensor.h"
 #include "../logging/grind_logging.h"
 #include "../config/constants.h"
-#include <Arduino.h>
 #include <esp_task_wdt.h>
 
 // Global instance
@@ -96,7 +98,7 @@ void WeightSamplingTask::stop_task() {
     if (task_handle) {
         uint32_t timeout_start = millis();
         while (eTaskGetState(task_handle) != eDeleted && millis() - timeout_start < 1000) {
-            delay(10);
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
         task_handle = nullptr;
     }
@@ -184,9 +186,9 @@ bool WeightSamplingTask::initialize_hx711_hardware() {
     
     // Hardware reset sequence (extracted from RealtimeController)
     weight_sensor->power_down();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Use vTaskDelay instead of delay()
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Use vTaskDelay instead of vTaskDelay(pdMS_TO_TICKS())
     weight_sensor->power_up();
-    vTaskDelay(pdMS_TO_TICKS(500));  // Use vTaskDelay instead of delay()
+    vTaskDelay(pdMS_TO_TICKS(500));  // Use vTaskDelay instead of vTaskDelay(pdMS_TO_TICKS())
     
     bool begin_success = weight_sensor->begin();
     if (!begin_success) {
@@ -208,7 +210,7 @@ bool WeightSamplingTask::initialize_hx711_hardware() {
         if (weight_sensor->data_waiting_async()) {
             weight_sensor->update_async();
         }
-        vTaskDelay(pdMS_TO_TICKS(10)); // Use vTaskDelay instead of delay()
+        vTaskDelay(pdMS_TO_TICKS(10)); // Use vTaskDelay instead of vTaskDelay(pdMS_TO_TICKS())
     }
     
     // Validate hardware responds

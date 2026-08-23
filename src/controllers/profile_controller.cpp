@@ -1,7 +1,6 @@
 #include "profile_controller.h"
-#include <Arduino.h>
 #include <string.h>
-#include <Preferences.h>
+#include "../storage/preferences.h"
 
 ProfileController::Snapshot ProfileController::snapshot() const {
     const auto lock = lock_profiles();

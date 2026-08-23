@@ -5,7 +5,6 @@
 #include "../hardware/grinder.h"
 #include "../logging/grind_logging.h"
 #include "../config/constants.h"
-#include <Arduino.h>
 
 void WeightGrindStrategy::on_enter(const GrindSessionDescriptor&, GrindStrategyContext&, const GrindLoopData&) {
     // No additional setup required; controller handled initialization.

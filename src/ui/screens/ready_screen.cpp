@@ -1,5 +1,4 @@
 #include "ready_screen.h"
-#include <Arduino.h>
 #include "../../config/constants.h"
 #include "../../controllers/grind_mode_traits.h"
 #include "../event_bridge_lvgl.h"

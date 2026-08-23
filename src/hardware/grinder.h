@@ -1,5 +1,4 @@
 #pragma once
-#include <Arduino.h>
 #include <driver/rmt_tx.h>
 #include <driver/rmt_encoder.h>
 #include <functional>

@@ -20,7 +20,10 @@ class OtaStreamTest(unittest.TestCase):
 #define LOG_BLE(...) ((void)0)
 uint32_t elapsed=0;
 uint32_t millis() { return elapsed; }
-void delay(unsigned ms) { elapsed+=ms; }
+typedef uint32_t TickType_t;
+#define configTICK_RATE_HZ 1000 // CONFIG_FREERTOS_HZ in sdkconfig.defaults
+#define pdMS_TO_TICKS(ms) ((TickType_t)((TickType_t)(ms) * configTICK_RATE_HZ / 1000U))
+void vTaskDelay(TickType_t ticks) { elapsed+=ticks*1000/configTICK_RATE_HZ; }
 struct WiFiClient {
     unsigned arrives=40, disconnects=30000;
     uint8_t magic=0xe9;

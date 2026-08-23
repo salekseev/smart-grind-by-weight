@@ -1,6 +1,9 @@
-#include <Arduino.h>
-#include <LittleFS.h>
-#include <Preferences.h>
+#include "storage/filesystem.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "system/device_info.h"
+#include "system/timing.h"
+#include "storage/preferences.h"
 #include <esp_system.h>
 #include "hardware/hardware_manager.h"
 #include "system/state_machine.h"
@@ -57,7 +60,7 @@ float load_startup_display_brightness() {
 void draw_early_startup_splash_if_ready() {
     if (!state_machine.is_state(UIState::READY) ||
         !ScreensaverSettings::is_startup_enabled() ||
-        !LittleFS.exists(BLE_IMAGE_FILENAME)) {
+        !filesystem.exists(BLE_IMAGE_FILENAME)) {
         return;
     }
 
@@ -80,7 +83,7 @@ void draw_early_startup_splash_if_ready() {
 void setup() {
     Serial.begin(HW_SERIAL_BAUD_RATE);
 #ifdef UI_DEBUG_SERIAL_DELAY_MS
-    delay(UI_DEBUG_SERIAL_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(UI_DEBUG_SERIAL_DELAY_MS));
 #endif
     
     // Log reset reason to help diagnose unexpected resets/freeze scenarios
@@ -106,7 +109,7 @@ void setup() {
     LOG_BLE("[STARTUP] Initializing ESP32-S3 Coffee Scale - Build %d - Core1 active\n", BUILD_NUMBER);
     
     // Initialize LittleFS once - format if necessary
-    if (!LittleFS.begin(true)) {
+    if (!filesystem.begin(true)) {
         LOG_BLE("ERROR: LittleFS mount failed - continuing without filesystem\n");
     } else {
         LOG_BLE("✅ LittleFS mounted successfully\n");
@@ -186,7 +189,7 @@ void setup() {
     if (!task_init_success) {
         LOG_BLE("ERROR: Failed to initialize TaskManager - system cannot start\n");
         while (true) {
-            delay(1000); // Halt system if task initialization fails
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Halt system if task initialization fails
         }
     }
     
@@ -271,7 +274,7 @@ void loop() {
                                (bluetooth_manager.is_connected() ? "CONN" : "ADV") : "OFF";
         const char* grinder_state = is_grinding ? "ACTIVE" : "IDLE";
         const char* tasks_status = task_manager.are_tasks_healthy() ? "HEALTHY" : "ERROR";
-        size_t free_heap_kb = ESP.getFreeHeap() / 1024;
+        size_t free_heap_kb = device_info::free_heap_bytes() / 1024;
         
         LOG_BLE("[%lums MAIN_LOOP_HEARTBEAT] Cycles: %lu/10s | Avg: %lums (%lu-%lums) | Tasks: %s | BLE: %s | Grinder: %s | Mem: %zuKB | Build: #%d\n",
                millis(), core1_cycle_count_10s, avg_cycle_time, core1_cycle_time_min_ms, core1_cycle_time_max_ms,

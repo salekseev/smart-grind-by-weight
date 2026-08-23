@@ -1,4 +1,5 @@
 #include "ui_helpers.h"
+#include "../system/timing.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -204,18 +205,18 @@ static void radio_button_event_handler(lv_event_t* e) {
 static void radio_button_group_delete_handler(lv_event_t* e) {
     lv_obj_t* group = (lv_obj_t*)lv_event_get_target(e);
     if (!group) {
-        Serial.println("[RADIO_BTN] Delete handler called with null group");
+        printf("%s\n", "[RADIO_BTN] Delete handler called with null group");
         return;
     }
 
     RadioButtonGroupData* data = (RadioButtonGroupData*)lv_obj_get_user_data(group);
     // Check if already freed (user_data is nullptr)
     if (!data) {
-        Serial.println("[RADIO_BTN] Delete handler called but data already freed");
+        printf("%s\n", "[RADIO_BTN] Delete handler called but data already freed");
         return;
     }
 
-    Serial.printf("[%lums RADIO_BTN] Freeing radio button group data\n", millis());
+    printf("[%lums RADIO_BTN] Freeing radio button group data\n", millis());
 
     // Clear user data first to prevent double-free if this handler is called again
     lv_obj_set_user_data(group, nullptr);
@@ -227,7 +228,7 @@ static void radio_button_group_delete_handler(lv_event_t* e) {
     }
     free(data);
 
-    Serial.printf("[%lums RADIO_BTN] Radio button group freed successfully\n", millis());
+    printf("[%lums RADIO_BTN] Radio button group freed successfully\n", millis());
 }
 
 lv_obj_t* create_radio_button_group(

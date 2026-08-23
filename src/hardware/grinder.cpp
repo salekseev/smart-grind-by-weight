@@ -1,4 +1,5 @@
 #include "grinder.h"
+#include "../system/timing.h"
 #include "../controllers/grind_events.h"
 #include "../config/constants.h"
 #include <driver/gpio.h>

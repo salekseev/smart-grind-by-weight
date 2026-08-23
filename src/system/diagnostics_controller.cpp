@@ -1,4 +1,5 @@
 #include "diagnostics_controller.h"
+#include "../system/timing.h"
 #include "../hardware/hardware_manager.h"
 #include "../hardware/WeightSensor.h"
 #include "../controllers/grind_controller.h"

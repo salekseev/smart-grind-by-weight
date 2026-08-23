@@ -1,6 +1,6 @@
 #include "statistics_manager.h"
+#include "../system/timing.h"
 
-#include <Arduino.h>
 #include <cmath>
 #include <cstring>
 #include <freertos/FreeRTOS.h>

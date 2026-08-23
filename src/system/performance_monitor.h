@@ -1,5 +1,4 @@
 #pragma once
-#include <Arduino.h>
 
 struct TaskPerformance {
     unsigned long min_interval = ULONG_MAX;

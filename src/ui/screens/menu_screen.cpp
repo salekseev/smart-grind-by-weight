@@ -1,9 +1,9 @@
 #include "menu_screen.h"
+#include "../../system/timing.h"
 #include "../../config/build_info.h"
-#include <Arduino.h>
 #include <algorithm>
-#include <LittleFS.h>
-#include <Preferences.h>
+#include "../../storage/filesystem.h"
+#include "../../storage/preferences.h"
 #include <WiFi.h>
 #include "../../config/constants.h"
 #include "../../logging/grind_logging.h"
@@ -1204,7 +1204,7 @@ void MenuScreen::update_auto_start_threshold_label(float threshold_g) {
 }
 
 void MenuScreen::update_screensaver_toggles() {
-    bool image_exists = LittleFS.exists(BLE_IMAGE_FILENAME);
+    bool image_exists = filesystem.exists(BLE_IMAGE_FILENAME);
 
     Preferences prefs;
     prefs.begin("screensaver", true);

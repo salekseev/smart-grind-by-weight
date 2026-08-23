@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <Arduino.h>
 
 // Forward declarations
 class HardwareManager;

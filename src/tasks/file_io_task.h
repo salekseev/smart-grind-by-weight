@@ -6,7 +6,7 @@
 #include "../config/constants.h"
 #include "../controllers/grind_controller.h" // For FlashOpRequest and LogMessage structures
 
-// File I/O operation types
+// FsFile I/O operation types
 enum class FileIOOperationType {
     FLASH_OPERATION,        // Flash operations (start/end grind session)
     LOG_MESSAGE,           // Log message output
@@ -32,7 +32,7 @@ struct FileIORequest {
 };
 
 /**
- * FileIOTask - Dedicated File I/O and Storage Operations
+ * FileIOTask - Dedicated FsFile I/O and Storage Operations
  * 
  * Extracted from GrindController queues to create a focused, low-priority task
  * that handles ALL file system operations without blocking real-time tasks.
@@ -42,7 +42,7 @@ struct FileIORequest {
  * - Handle log message output to serial/BLE
  * - Manage preference/settings persistence
  * - Coordinate data export operations
- * - File system maintenance and cleanup
+ * - FsFile system maintenance and cleanup
  * 
  * Architecture:
  * - Runs on Core 1 at low priority (1)
@@ -59,7 +59,7 @@ private:
     // Inter-task communication
     QueueHandle_t file_io_queue;
     
-    // File I/O state
+    // FsFile I/O state
     bool filesystem_available;
     uint32_t total_operations_processed;
     uint32_t failed_operations_count;
@@ -93,7 +93,7 @@ public:
     void stop_task();
     bool is_running() const { return task_running; }
     
-    // File system status
+    // FsFile system status
     bool is_filesystem_available() const { return filesystem_available; }
     uint32_t get_total_operations() const { return total_operations_processed; }
     uint32_t get_failed_operations() const { return failed_operations_count; }
@@ -111,14 +111,14 @@ public:
     
 private:
     
-    // File I/O operation processing
+    // FsFile I/O operation processing
     void process_file_io_operations();
     void process_flash_operation(const FlashOpRequest& request);
     void process_log_message(const LogMessage& message);
     void process_preference_write(const char* key, const char* value);
     void process_data_export(const char* export_path, uint32_t start_id, uint32_t end_id);
     
-    // File system management
+    // FsFile system management
     void check_filesystem_health();
     bool validate_filesystem_access();
     void perform_filesystem_maintenance();

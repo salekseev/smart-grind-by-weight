@@ -2,7 +2,6 @@
 
 #include "load_cell_driver.h"
 #include "../config/constants.h"
-#include <Arduino.h>
 
 /**
  * MockHX711Driver provides a compile-time selectable simulated implementation of

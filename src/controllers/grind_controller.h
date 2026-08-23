@@ -12,8 +12,8 @@
 #include "weight_grind_strategy.h"
 #include "time_grind_strategy.h"
 #include "../system/operation_interlock.h"
-#include <Preferences.h>
-#include <LittleFS.h>
+#include "../storage/preferences.h"
+#include "../storage/filesystem.h"
 #include <mutex>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>

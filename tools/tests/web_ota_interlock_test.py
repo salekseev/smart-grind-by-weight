@@ -33,6 +33,7 @@ class WebOtaInterlockTest(unittest.TestCase):
 #include "system/operation_interlock.h"
 #include <atomic>
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <functional>
@@ -112,8 +113,8 @@ struct BluetoothManager {
 struct Grinder { unsigned stops=0; void stop() { assert(!operation_interlock().try_acquire()); ++stops; } } motor;
 struct HardwareManager { Grinder* get_grinder() { return &motor; } } hardware;
 struct { void update() {} } device_api;
-struct { void flush() {} } Serial;
-struct { unsigned restarts=0; void restart() { ++restarts; } } ESP;
+struct { unsigned restarts=0; } ESP; // Counts esp_restart() calls.
+void esp_restart() { ++ESP.restarts; }
 struct esp_partition_t { size_t size=1000000; } partition;
 const esp_partition_t* esp_ota_get_next_update_partition(void*) { return &partition; }
 struct Update {

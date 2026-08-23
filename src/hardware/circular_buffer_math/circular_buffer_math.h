@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Arduino.h>
 #include <algorithm>
 #include "../../config/constants.h"
 

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
-#include <Preferences.h>
+#include "../storage/preferences.h"
 #include <atomic>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
