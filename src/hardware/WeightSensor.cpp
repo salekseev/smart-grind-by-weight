@@ -1,4 +1,5 @@
 #include "WeightSensor.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <freertos/FreeRTOS.h>
@@ -422,7 +423,7 @@ uint32_t WeightSensor::get_adc_headroom_counts() const {
 
     const int32_t raw = get_raw_adc_instant();
     if (raw < 0 || raw > kAdcMaximumRaw) return 0;
-    return static_cast<uint32_t>(min(raw, kAdcMaximumRaw - raw));
+    return static_cast<uint32_t>(std::min(raw, kAdcMaximumRaw - raw));
 }
 
 bool WeightSensor::is_adc_near_saturation() const {
@@ -768,7 +769,7 @@ bool WeightSensor::sample_and_feed_filter() {
                 static uint32_t last_saturation_log_ms = 0;
                 if (last_saturation_log_ms == 0 || timestamp - last_saturation_log_ms >= 5000) {
                     const uint32_t headroom = static_cast<uint32_t>(
-                        min(raw_adc, kAdcMaximumRaw - raw_adc));
+                        std::min(raw_adc, kAdcMaximumRaw - raw_adc));
                     LOG_BLE("WeightSensor: HX711 input near ADC rail - raw=%ld, headroom=%lu counts; check load-cell wiring and preload\n",
                             (long)raw_adc, (unsigned long)headroom);
                     last_saturation_log_ms = timestamp;

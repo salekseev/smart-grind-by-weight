@@ -1,6 +1,7 @@
 #pragma once
 
 #include "load_cell_driver.h"
+#include <cmath>
 #include <cstdint>
 #include "../config/constants.h"
 

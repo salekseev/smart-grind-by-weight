@@ -1,11 +1,11 @@
 #pragma once
 #include <lvgl.h>
-#ifdef SMART_GRIND_SIM
 #include <string>
+
+// The device build and the desktop simulator now share one string type; the
+// alias remains because the screen's public API is written in terms of it.
 using ReadyScreenText = std::string;
-#else
-using ReadyScreenText = String;
-#endif
+
 #include "../../config/constants.h"
 #include "../../controllers/grind_mode.h"
 

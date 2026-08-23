@@ -1,6 +1,6 @@
 #include "network_manager.h"
-#include <freertos/semphr.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>

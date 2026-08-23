@@ -1,6 +1,6 @@
 #include "grind_controller.h"
-#include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <cstdint>
 #include <cstdio>
 #include "../system/timing.h"

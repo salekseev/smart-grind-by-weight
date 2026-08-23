@@ -1,4 +1,5 @@
 #include "autotune_controller.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include "../system/timing.h"
@@ -334,7 +335,7 @@ void AutoTuneController::update_binary_search_phase() {
             }
 
             // Bounds checking
-            current_pulse_ms = constrain(current_pulse_ms,
+            current_pulse_ms = std::clamp(current_pulse_ms,
                                           GRIND_AUTOTUNE_LATENCY_MIN_MS,
                                           GRIND_AUTOTUNE_LATENCY_MAX_MS);
 

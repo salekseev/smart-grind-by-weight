@@ -1,4 +1,6 @@
 #include "data_stream.h"
+#include <string>
+#include "../system/string_utils.h"
 #include <esp_heap_caps.h>
 #include <cstdint>
 #include <cstdio>
@@ -57,15 +59,15 @@ uint32_t DataStreamManager::get_session_list(uint32_t* session_ids, uint32_t max
         if (dir && dir.isDirectory()) {
             FsFile file = dir.openNextFile();
             while (file && list_count < total_sessions) {
-                String filename = file.name();
-                bool is_session_file = (filename.startsWith("session_") || filename.indexOf("/session_") != -1)
-                                       && filename.endsWith(".bin");
+                std::string filename = file.name();
+                bool is_session_file = (strings::starts_with(filename, "session_") || strings::contains(filename, "/session_"))
+                                       && strings::ends_with(filename, ".bin");
                 if (is_session_file) {
                     // Extract session ID from filename
-                    int start_pos = filename.indexOf('_') + 1;
-                    int end_pos = filename.lastIndexOf('.');
+                    int start_pos = strings::index_of(filename, '_') + 1;
+                    int end_pos = strings::last_index_of(filename, '.');
                     if (start_pos > 0 && end_pos > start_pos) {
-                        uint32_t session_id = filename.substring(start_pos, end_pos).toInt();
+                        uint32_t session_id = strings::to_uint32(strings::slice(filename, start_pos, end_pos));
                         if (session_id > 0) {
                             session_list[list_count++] = session_id;
                         }

@@ -1,4 +1,5 @@
 #include "screen_timeout_controller.h"
+#include <algorithm>
 #include <cstdint>
 #include "../../system/timing.h"
 #include "screensaver_controller.h"
@@ -58,12 +59,12 @@ void ScreenTimeoutController::update() {
     const uint32_t ms_since_settings_applied = now - settings_applied_at_ms_;
     // Do not let weight changes from before a runtime settings save keep the
     // display awake under the newly selected timeout.
-    weight_activity_window_ms = min(weight_activity_window_ms, ms_since_settings_applied);
+    weight_activity_window_ms = std::min(weight_activity_window_ms, ms_since_settings_applied);
     bool recent_weight_activity = sensor &&
                                   sensor->weight_range_exceeds(weight_activity_window_ms,
                                                                USER_WEIGHT_ACTIVITY_THRESHOLD_G);
 
-    const uint32_t inactive_ms = min(ms_since_touch, ms_since_settings_applied);
+    const uint32_t inactive_ms = std::min(ms_since_touch, ms_since_settings_applied);
     const DisplayIdleState idle_state = recent_weight_activity
         ? DisplayIdleState::ACTIVE
         : display_idle_state(inactive_ms,
