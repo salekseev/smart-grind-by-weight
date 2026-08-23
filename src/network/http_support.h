@@ -88,9 +88,6 @@ std::string header(httpd_req_t* request, const char* name);
  */
 bool origin_allowed(httpd_req_t* request);
 
-/** Decode application/x-www-form-urlencoded escaping, including '+' as space. */
-std::string url_decode(const std::string& value);
-
 /** Escape a value for embedding in a JSON string literal. */
 std::string json_escape(const std::string& value);
 

@@ -41,7 +41,7 @@ python3 tools/venv/bin/python -m platformio run --target upload -e waveshare-esp
 
 For a complete V2 installation, wire HX711 SCK to GPIO 1 and the grinder motor-control lead to GPIO 16. GPIO 18 is connected to the V2 touchscreen interrupt (`TP_INT`) and must not be used for motor control. The V1 connections remain HX711 SCK on GPIO 2 and motor control on GPIO 18.
 
-Do not change only the chip-select pin in a V1 build. Hardware validation showed that an Arduino_GFX SH8601 attempt remained black; the working V2 target uses Waveshare's native Espressif `esp_lcd` SH8601 driver and initialization sequence.
+Do not change only the chip-select pin in a V1 build. Both revisions drive the panel through `esp_lcd`, but they are different controllers with different power-on sequences: V1 is a CO5300 and V2 an SH8601. Changing the pin without the matching driver and initialization sequence leaves the panel black.
 
 If using the Web Flasher, select **Newer SH8601 (V2 firmware; may say Rev1.1)** for this generation. Do not select the original CO5300 image merely because the PCB says `Rev1.1`.
 

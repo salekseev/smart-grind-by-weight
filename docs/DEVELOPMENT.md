@@ -131,14 +131,31 @@ The project has four build targets:
 
 ### Development Platform
 
-This project uses the **pioarduino ESP32 platform** (a community fork) instead of the standard Espressif ESP32 platform. This ensures proper support for the Waveshare ESP32-S3 AMOLED display.
+The firmware is a native **ESP-IDF** application built through PlatformIO. The
+**pioarduino ESP32 platform** (a community fork) supplies the toolchain because
+it tracks newer ESP-IDF releases than the stock PlatformIO platform.
 
 **Platform Details:**
-- **Platform**: [pioarduino/platform-espressif32](https://github.com/pioarduino/platform-espressif32) (stable release)
-- **Framework**: Arduino ESP32 Core 3.x
+- **Platform**: [pioarduino/platform-espressif32](https://github.com/pioarduino/platform-espressif32), pinned to 55.03.32
+- **Framework**: ESP-IDF v5.5.1 (`framework = espidf`)
 - **Target**: ESP32-S3 with AMOLED touch display
 
-The platform dependency is automatically handled by PlatformIO via the `platformio.ini` configuration.
+PlatformIO installs the platform and toolchain from the URL in `platformio.ini`.
+The ESP-IDF component manager then resolves the managed dependencies listed in
+`src/idf_component.yml` into `managed_components/` on the first build.
+
+**Project layout for ESP-IDF:**
+- `CMakeLists.txt` - project root; also puts `include/` on every component's
+  search path so LVGL finds `lv_conf.h`
+- `src/CMakeLists.txt` - registers the firmware as the main component
+- `src/idf_component.yml` - managed dependencies (LVGL, littlefs, NimBLE-C++,
+  mdns, esp_websocket_client, esp_lcd_co5300)
+- `sdkconfig.defaults` - CPU, PSRAM, partitions, BLE, TLS and FreeRTOS settings;
+  per-environment overrides go in `custom_sdkconfig` in `platformio.ini`
+- `components/` - vendored local components (delta, detools, improv)
+
+`sdkconfig.<environment>` files are generated and are not checked in. Delete one
+to pick up an edited `sdkconfig.defaults`.
 
 ### Build Commands
 
@@ -263,7 +280,7 @@ python3 tools/grinder.py debug
 **⚠️ BLE Monitoring Limitations:**
 - **Boot messages are missed** - BLE connection establishes after device boot
 - **Kernel panics not captured** - System-level crashes bypass BLE and go directly to serial
-- **Framework messages missing** - Low-level Arduino/ESP-IDF messages don't route through BLE
+- **Framework messages missing** - Low-level ESP-IDF log messages don't route through BLE
 - **Best for application debug** - Primarily receives debug messages from the smart-grind-by-weight firmware itself
 
 For complete debugging (including boot sequence and system messages), use USB serial monitoring.
