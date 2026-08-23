@@ -957,7 +957,7 @@ int GrindController::get_progress_percent() const {
                    : (weight_sensor ? weight_sensor->get_display_weight() : 0.0f);
     if (ground < 0) ground = 0;
     int progress = (int)((ground / target_weight) * 100);
-    return min(progress, 100);
+    return std::min(progress, 100);
 }
 
 float GrindController::get_grind_time() const {

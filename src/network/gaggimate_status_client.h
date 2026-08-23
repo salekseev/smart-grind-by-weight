@@ -1,7 +1,9 @@
 #pragma once
 
-#include <WebSocketsClient.h>
+#include <esp_websocket_client.h>
+
 #include <cstdint>
+#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -21,9 +23,9 @@ struct GaggiMateStatus {
 class GaggiMateStatusClient {
 public:
     void init();
-    bool configure(bool enabled, const String& host);
+    bool configure(bool enabled, const std::string& host);
     GaggiMateStatus status() const;
-    String configured_host() const;
+    std::string configured_host() const;
 
 private:
     static constexpr uint32_t OFFLINE_GRACE_MS = 5000;
@@ -31,12 +33,12 @@ private:
 
     mutable SemaphoreHandle_t mutex_ = nullptr;
     TaskHandle_t task_handle_ = nullptr;
-    WebSocketsClient websocket_;
+    esp_websocket_client_handle_t websocket_ = nullptr;
     bool enabled_ = false;
     bool reconnect_requested_ = false;
     bool websocket_started_ = false;
-    String host_;
-    String connected_host_;
+    std::string host_;
+    std::string connected_host_;
     GaggiMateStatus status_{};
     uint32_t last_success_ms_ = 0;
     uint32_t last_http_poll_ms_ = 0;
@@ -44,13 +46,15 @@ private:
     bool ensure_task();
     static void task_entry(void* context);
     void task_loop();
-    void start_websocket(const String& host);
+    void start_websocket(const std::string& host);
     void stop_websocket();
-    void handle_websocket_event(WStype_t type, uint8_t* payload, size_t length);
-    bool apply_status_payload(const String& payload, bool require_event_type);
-    void poll_http_fallback(const String& host);
+    /** esp_websocket_client event trampoline. */
+    static void websocket_event_handler(void* context, esp_event_base_t base, int32_t id,
+                                        void* data);
+    bool apply_status_payload(const std::string& payload, bool require_event_type);
+    void poll_http_fallback(const std::string& host);
     void mark_offline_if_stale(uint32_t now_ms);
-    bool read_configuration(bool& enabled, String& host) const;
+    bool read_configuration(bool& enabled, std::string& host) const;
 };
 
 extern GaggiMateStatusClient gaggimate_status_client;

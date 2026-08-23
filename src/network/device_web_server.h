@@ -1,9 +1,12 @@
 #pragma once
 
-#include <ESPAsyncWebServer.h>
-#include <cstdint>
+#include <esp_http_server.h>
+
 #include <atomic>
+#include <cstdint>
 #include <mutex>
+#include <string>
+
 #include "../system/operation_interlock.h"
 
 class GrindController;
@@ -42,12 +45,14 @@ public:
     bool firmware_update_available() const {
         return firmware_update_state_.load() == FirmwareUpdateState::AVAILABLE;
     }
-    String latest_release_tag() const;
+    std::string latest_release_tag() const;
     bool install_available_update();
-    AsyncWebServer& server() { return server_; }
+
+    /** The running HTTP server, or nullptr before begin() succeeds. */
+    httpd_handle_t server() const { return server_; }
 
 private:
-    AsyncWebServer server_{80};
+    httpd_handle_t server_ = nullptr;
     bool initialized_ = false;
     bool started_ = false;
     mutable std::recursive_mutex ota_mutex_;
@@ -71,13 +76,14 @@ private:
     HardwareManager* hardware_manager_ = nullptr;
     GrindController* grind_controller_ = nullptr;
     BluetoothManager* bluetooth_manager_ = nullptr;
+    ProfileController* profile_controller_ = nullptr;
 
     void configure_routes();
-    void handle_ota_upload(AsyncWebServerRequest* request, const String& filename,
-                           size_t index, uint8_t* data, size_t len, bool final);
-    bool start_github_ota(const String& tag);
+    esp_err_t handle_ota_upload(httpd_req_t* request);
+    esp_err_t handle_screensaver_upload(httpd_req_t* request);
+    bool start_github_ota(const std::string& tag);
     static void github_ota_task(void* parameter);
-    void perform_github_ota(const String& tag);
+    void perform_github_ota(const std::string& tag);
     static void firmware_update_check_task(void* parameter);
     void perform_firmware_update_check();
     bool request_ota_preparation();

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <climits>
+
 struct TaskPerformance {
     unsigned long min_interval = ULONG_MAX;
     unsigned long max_interval = 0;

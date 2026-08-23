@@ -151,7 +151,7 @@ void setup() {
     network_manager.init(hardware_manager.get_preferences());
     gaggimate_status_client.init();
     device_web_server.init(&hardware_manager, &grind_controller, &bluetooth_manager, &profile_controller);
-    provisioning_service.init(hardware_manager.get_preferences(), &device_web_server.server());
+    provisioning_service.init(hardware_manager.get_preferences());
     
     bluetooth_manager.init(hardware_manager.get_preferences());
     

@@ -6,6 +6,7 @@
 #include "hx711_driver.h"
 #include "../config/constants.h"
 #include "../storage/preferences.h"
+#include "../system/timing.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <memory>

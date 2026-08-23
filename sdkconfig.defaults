@@ -97,6 +97,8 @@ CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
 #
 CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_LWIP_SO_RCVBUF=y
+# Two NTP servers are configured for clock sync after connecting.
+CONFIG_LWIP_SNTP_MAX_SERVERS=2
 
 #
 # TLS for the GitHub release mirror used by on-device firmware updates
@@ -106,6 +108,13 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
 CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_PEER_CERT=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+
+#
+# LVGL reads include/lv_conf.h. Its Kconfig defaults to ignoring that file and
+# configuring itself from menuconfig instead, which silently drops the fonts and
+# colour settings the UI depends on.
+#
+CONFIG_LV_CONF_SKIP=n
 
 #
 # Filesystem

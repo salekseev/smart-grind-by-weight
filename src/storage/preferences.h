@@ -47,6 +47,8 @@ public:
     size_t putUShort(const char* key, uint16_t value);
     size_t putInt(const char* key, int32_t value);
     size_t putUInt(const char* key, uint32_t value);
+    size_t putLong64(const char* key, int64_t value);
+    size_t putULong64(const char* key, uint64_t value);
     size_t putBool(const char* key, bool value);
     size_t putFloat(const char* key, float value);
     size_t putDouble(const char* key, double value);
@@ -62,6 +64,8 @@ public:
     uint16_t getUShort(const char* key, uint16_t default_value = 0);
     int32_t getInt(const char* key, int32_t default_value = 0);
     uint32_t getUInt(const char* key, uint32_t default_value = 0);
+    int64_t getLong64(const char* key, int64_t default_value = 0);
+    uint64_t getULong64(const char* key, uint64_t default_value = 0);
     bool getBool(const char* key, bool default_value = false);
     float getFloat(const char* key, float default_value = 0.0f);
     double getDouble(const char* key, double default_value = 0.0);

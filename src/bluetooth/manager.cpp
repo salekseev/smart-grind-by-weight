@@ -1,4 +1,5 @@
 #include "manager.h"
+#include "../system/string_utils.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <cmath>
@@ -1840,11 +1841,14 @@ void BluetoothManager::generate_diagnostic_report() {
                 FsFile file = dir.openNextFile();
                 while (file && count < MAX_SESSIONS) {
                     std::string filename = file.name();
-                    if ((filename.startsWith("session_") || filename.indexOf("/session_") != -1) && filename.endsWith(".bin")) {
-                        int start_pos = filename.indexOf('_') + 1;
-                        int end_pos = filename.lastIndexOf('.');
+                    if ((strings::starts_with(filename, "session_") ||
+                         strings::contains(filename, "/session_")) &&
+                        strings::ends_with(filename, ".bin")) {
+                        const int start_pos = strings::index_of(filename, '_') + 1;
+                        const int end_pos = strings::last_index_of(filename, '.');
                         if (start_pos > 0 && end_pos > start_pos) {
-                            session_ids[count++] = filename.substring(start_pos, end_pos).toInt();
+                            session_ids[count++] =
+                                strings::to_uint32(strings::slice(filename, start_pos, end_pos));
                         }
                     }
                     file = dir.openNextFile();

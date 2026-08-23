@@ -585,7 +585,7 @@ bool GrindLogger::clear_all_sessions_from_flash() {
             // Close the file handle before attempting deletion
             file.close();
             
-            if (filesystem.remove(filePath)) {
+            if (filesystem.remove(filePath.c_str())) {
                 files_removed++;
             } else {
                 LOG_DEBUG_PRINTF("   -> FAILED\n");

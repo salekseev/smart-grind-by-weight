@@ -12,7 +12,7 @@ idf_component_register(
         # Espressif components
         app_update
         driver
-        esp_adc
+        esp_driver_usb_serial_jtag
         esp_event
         esp_http_client
         esp_http_server

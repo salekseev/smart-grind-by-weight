@@ -26,6 +26,14 @@ using Handler = std::function<esp_err_t(httpd_req_t*)>;
  */
 bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handler handler);
 
+/**
+ * Register a WebSocket endpoint.
+ *
+ * The handler is called once with `req->method == HTTP_GET` after a successful
+ * handshake, then once per received frame.
+ */
+bool websocket_route(httpd_handle_t server, const char* uri, Handler handler);
+
 /** Register the handler invoked for any URI without a matching route. */
 bool not_found(httpd_handle_t server, Handler handler);
 

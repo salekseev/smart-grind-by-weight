@@ -8,7 +8,6 @@
 #include <algorithm>
 #include "../../storage/filesystem.h"
 #include "../../storage/preferences.h"
-#include <WiFi.h>
 #include "../../config/constants.h"
 #include "../../logging/grind_logging.h"
 #include "../../system/statistics_manager.h"
@@ -411,7 +410,7 @@ void MenuScreen::update_network_status() {
         case NetworkState::WIFI_CONNECTED:
             if (device_web_server.is_ota_active()) {
                 status = "Updating firmware";
-                detail = std::string(device_web_server.ota_progress_percent()) + "% received\nDo not remove power.";
+                detail = std::to_string(device_web_server.ota_progress_percent()) + "% received\nDo not remove power.";
             } else {
                 status = "Connected";
                 detail = network_manager.network_name() + "\nhttp://" + network_manager.hostname() + ".local\n" + network_manager.ip_address();
@@ -426,7 +425,7 @@ void MenuScreen::update_network_status() {
             const std::string& ssid = provisioning_service.access_point_ssid();
             const std::string& password = provisioning_service.access_point_password();
             detail = "Scan to join\n" + ssid + "\nPassword: " + password +
-                     "\nthen use the sign-in page or open " + WiFi.softAPIP().toString();
+                     "\nthen use the sign-in page or open " + network_manager.access_point_ip();
             qr_payload = "WIFI:T:";
             qr_payload += password.empty() ? "nopass" : "WPA";
             qr_payload += ";S:" + escape_wifi_qr_value(ssid);
