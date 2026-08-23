@@ -110,7 +110,8 @@ bool GaggiMateStatusClient::configure(bool enabled, const std::string& host) {
 
     Preferences preferences;
     if (!preferences.begin(kPreferencesNamespace, false)) return false;
-    const bool stored = host.empty() || preferences.putString(kHostKey, host) > 0;
+    // An empty host means "leave the saved one alone", not "store nothing".
+    const bool stored = host.empty() || preferences.putString(kHostKey, host);
     preferences.end();
     if (!stored) return false;
 

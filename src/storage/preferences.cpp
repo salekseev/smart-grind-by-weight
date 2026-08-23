@@ -58,80 +58,71 @@ bool Preferences::isKey(const char* key) {
     return nvs_get_blob(handle_, key, nullptr, &length) == ESP_OK;
 }
 
-size_t Preferences::putChar(const char* key, int8_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_i8(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putChar(const char* key, int8_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_i8(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putUChar(const char* key, uint8_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_u8(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putUChar(const char* key, uint8_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_u8(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putShort(const char* key, int16_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_i16(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putShort(const char* key, int16_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_i16(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putUShort(const char* key, uint16_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_u16(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putUShort(const char* key, uint16_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_u16(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putInt(const char* key, int32_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_i32(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putInt(const char* key, int32_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_i32(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putUInt(const char* key, uint32_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_u32(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putUInt(const char* key, uint32_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_u32(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putLong64(const char* key, int64_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_i64(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putLong64(const char* key, int64_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_i64(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putULong64(const char* key, uint64_t value) {
-    if (!open_ || read_only_ || !key) return 0;
-    if (nvs_set_u64(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return sizeof(value);
+bool Preferences::putULong64(const char* key, uint64_t value) {
+    if (!open_ || read_only_ || !key) return false;
+    return nvs_set_u64(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putBool(const char* key, bool value) {
+bool Preferences::putBool(const char* key, bool value) {
     return putUChar(key, value ? 1 : 0);
 }
 
-size_t Preferences::putFloat(const char* key, float value) {
+bool Preferences::putFloat(const char* key, float value) {
     return putBytes(key, &value, sizeof(value));
 }
 
-size_t Preferences::putDouble(const char* key, double value) {
+bool Preferences::putDouble(const char* key, double value) {
     return putBytes(key, &value, sizeof(value));
 }
 
-size_t Preferences::putString(const char* key, const char* value) {
-    if (!open_ || read_only_ || !key || !value) return 0;
-    if (nvs_set_str(handle_, key, value) != ESP_OK || !commit()) return 0;
-    return strlen(value);
+bool Preferences::putString(const char* key, const char* value) {
+    if (!open_ || read_only_ || !key || !value) return false;
+    // An empty string is a legitimate value; NVS stores it as a lone terminator.
+    return nvs_set_str(handle_, key, value) == ESP_OK && commit();
 }
 
-size_t Preferences::putString(const char* key, const std::string& value) {
+bool Preferences::putString(const char* key, const std::string& value) {
     return putString(key, value.c_str());
 }
 
-size_t Preferences::putBytes(const char* key, const void* value, size_t length) {
-    if (!open_ || read_only_ || !key || !value || length == 0) return 0;
-    if (nvs_set_blob(handle_, key, value, length) != ESP_OK || !commit()) return 0;
-    return length;
+bool Preferences::putBytes(const char* key, const void* value, size_t length) {
+    if (!open_ || read_only_ || !key || !value || length == 0) return false;
+    return nvs_set_blob(handle_, key, value, length) == ESP_OK && commit();
 }
 
 int8_t Preferences::getChar(const char* key, int8_t default_value) {

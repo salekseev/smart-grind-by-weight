@@ -40,21 +40,23 @@ public:
     bool remove(const char* key);
     bool isKey(const char* key);
 
-    // Writes return the number of bytes stored, or 0 on failure.
-    size_t putChar(const char* key, int8_t value);
-    size_t putUChar(const char* key, uint8_t value);
-    size_t putShort(const char* key, int16_t value);
-    size_t putUShort(const char* key, uint16_t value);
-    size_t putInt(const char* key, int32_t value);
-    size_t putUInt(const char* key, uint32_t value);
-    size_t putLong64(const char* key, int64_t value);
-    size_t putULong64(const char* key, uint64_t value);
-    size_t putBool(const char* key, bool value);
-    size_t putFloat(const char* key, float value);
-    size_t putDouble(const char* key, double value);
-    size_t putString(const char* key, const char* value);
-    size_t putString(const char* key, const std::string& value);
-    size_t putBytes(const char* key, const void* value, size_t length);
+    // Writes report success, not a byte count. A byte count cannot distinguish
+    // failure from successfully storing an empty string, which is exactly what
+    // an open Wi-Fi network's password is.
+    bool putChar(const char* key, int8_t value);
+    bool putUChar(const char* key, uint8_t value);
+    bool putShort(const char* key, int16_t value);
+    bool putUShort(const char* key, uint16_t value);
+    bool putInt(const char* key, int32_t value);
+    bool putUInt(const char* key, uint32_t value);
+    bool putLong64(const char* key, int64_t value);
+    bool putULong64(const char* key, uint64_t value);
+    bool putBool(const char* key, bool value);
+    bool putFloat(const char* key, float value);
+    bool putDouble(const char* key, double value);
+    bool putString(const char* key, const char* value);
+    bool putString(const char* key, const std::string& value);
+    bool putBytes(const char* key, const void* value, size_t length);
 
     // Reads fall back to the supplied default when the key is absent or has an
     // unexpected type.

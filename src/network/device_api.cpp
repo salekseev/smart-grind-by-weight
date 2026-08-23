@@ -739,16 +739,16 @@ bool DeviceApi::apply_settings(const DeviceSettingsUpdate& update) {
             settings.grind_mode == 0 ? GrindMode::WEIGHT : GrindMode::TIME,
             settings.profile_weights, settings.profile_times);
 
-    saved = (grinder->putInt(GrindController::PREF_KEY_GRINDER_MODE, settings.purge_mode) == sizeof(int32_t)) && saved;
-    saved = (grinder->putFloat(GrindController::PREF_KEY_GRINDER_AMOUNT_G, settings.purge_amount_g) == sizeof(float)) && saved;
-    saved = (grinder->putFloat(GrindController::PREF_KEY_GRIND_FRESHNESS_HOURS, settings.freshness_hours) == sizeof(float)) && saved;
+    saved = grinder->putInt(GrindController::PREF_KEY_GRINDER_MODE, settings.purge_mode) && saved;
+    saved = grinder->putFloat(GrindController::PREF_KEY_GRINDER_AMOUNT_G, settings.purge_amount_g) && saved;
+    saved = grinder->putFloat(GrindController::PREF_KEY_GRIND_FRESHNESS_HOURS, settings.freshness_hours) && saved;
     saved = grind_controller_->save_coast_ratio(settings.coast_ratio) && saved;
     saved = grind_controller_->save_motor_latency(settings.motor_latency_ms) && saved;
 
     auto put_bool = [](const char* name_space, const char* key, bool value) {
         Preferences preferences;
         if (!preferences.begin(name_space, false)) return false;
-        const bool stored = preferences.putBool(key, value) == sizeof(bool);
+        const bool stored = preferences.putBool(key, value);
         preferences.end();
         return stored;
     };
@@ -756,7 +756,7 @@ bool DeviceApi::apply_settings(const DeviceSettingsUpdate& update) {
     saved = put_bool("autogrind", "auto_return", settings.auto_return) && saved;
     Preferences auto_preferences;
     if (auto_preferences.begin("autogrind", false)) {
-        saved = (auto_preferences.putFloat("start_delta_g", settings.auto_start_threshold_g) == sizeof(float)) && saved;
+        saved = auto_preferences.putFloat("start_delta_g", settings.auto_start_threshold_g) && saved;
         auto_preferences.end();
     } else {
         saved = false;
@@ -769,9 +769,9 @@ bool DeviceApi::apply_settings(const DeviceSettingsUpdate& update) {
 
     Preferences brightness;
     if (brightness.begin("brightness", false)) {
-        const bool normal_saved = brightness.putFloat("normal", settings.brightness_percent / 100.0f) == sizeof(float);
+        const bool normal_saved = brightness.putFloat("normal", settings.brightness_percent / 100.0f);
         saved = normal_saved && saved;
-        saved = (brightness.putFloat("screensaver", settings.screensaver_brightness_percent / 100.0f) == sizeof(float)) && saved;
+        saved = brightness.putFloat("screensaver", settings.screensaver_brightness_percent / 100.0f) && saved;
         brightness.end();
         if (normal_saved && hardware_->get_display()) {
             hardware_->get_display()->set_brightness(settings.brightness_percent / 100.0f);
@@ -787,7 +787,7 @@ bool DeviceApi::apply_settings(const DeviceSettingsUpdate& update) {
     }
     Preferences screensaver;
     if (screensaver.begin("screensaver", false)) {
-        const bool style_saved = screensaver.putString("style", settings.screensaver_style) == strlen(settings.screensaver_style);
+        const bool style_saved = screensaver.putString("style", settings.screensaver_style);
         saved = style_saved && saved;
         const std::string stored_style = screensaver.getString("style", "");
         screensaver.end();

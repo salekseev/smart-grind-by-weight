@@ -84,7 +84,7 @@ void heap_caps_free(void* p) {
 struct Preferences {
     unsigned writes = 0;
     uint32_t getUInt(const char*, int fallback) { return fallback; }
-    size_t putUInt(const char*, uint32_t) { ++writes; return 4; }
+    bool putUInt(const char*, uint32_t) { ++writes; return true; }
     bool begin(const char*, bool) { return true; }
     bool getBool(const char*, bool fallback) { return fallback; }
     void end() {}
