@@ -63,6 +63,7 @@ private:
 
     State state_ = State::UNINITIALISED;
     std::string boundary_;   // "--<boundary>"
+    std::string delimiter_;  // CRLF + boundary_, as it appears after a part
     std::string pending_;    // bytes not yet classified
     std::string filename_;
     bool saw_file_ = false;

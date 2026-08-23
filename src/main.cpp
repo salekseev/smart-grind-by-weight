@@ -1,3 +1,5 @@
+#include <driver/usb_serial_jtag.h>
+#include <driver/usb_serial_jtag_vfs.h>
 #include <esp_event.h>
 #include <cstdint>
 #include <esp_netif.h>
@@ -84,10 +86,28 @@ void draw_early_startup_splash_if_ready() {
 }
 
 /**
+ * Route the console through the USB-Serial-JTAG driver.
+ *
+ * Everything in this firmware logs with printf, and Improv provisioning needs
+ * non-blocking reads from that same port, which the register-level default
+ * console cannot do. Installing the driver and pointing stdio at it keeps log
+ * output and Improv frames in one ordered stream.
+ */
+void init_console() {
+    usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    config.rx_buffer_size = 512;
+    config.tx_buffer_size = 1024;
+    if (usb_serial_jtag_driver_install(&config) != ESP_OK) return;
+    usb_serial_jtag_vfs_use_driver();
+}
+
+/**
  * Bring up the settings partition and the shared event loop that the
  * Wi-Fi, BLE and HTTP services all attach to.
  */
 void init_platform_services() {
+    init_console();
+
     esp_err_t nvs_status = nvs_flash_init();
     if (nvs_status == ESP_ERR_NVS_NO_FREE_PAGES ||
         nvs_status == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -245,9 +265,9 @@ void loop() {
     uint32_t current_time = millis();
     network_manager.update();
     provisioning_service.update();
-    // AsyncTCP requires lwIP's TCP/IP task and mutexes to exist. They are only
-    // created after Wi-Fi enters station or access-point mode, so defer the
-    // HTTP listener until NetworkManager/ProvisioningService has done that.
+    // The HTTP listener needs lwIP, which only exists once the Wi-Fi driver is
+    // running in station or access-point mode, so defer it until
+    // NetworkManager/ProvisioningService has brought the radio up.
     device_web_server.begin();
     device_web_server.update();
     if (last_uptime_update == 0) {

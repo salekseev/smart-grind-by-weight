@@ -25,6 +25,8 @@ public:
     void init();
     bool configure(bool enabled, const std::string& host);
     GaggiMateStatus status() const;
+    /** Accepts a hostname or dotted address this client can reach. */
+    static bool is_valid_host(const std::string& host);
     std::string configured_host() const;
 
 private:
@@ -36,7 +38,6 @@ private:
     esp_websocket_client_handle_t websocket_ = nullptr;
     bool enabled_ = false;
     bool reconnect_requested_ = false;
-    bool websocket_started_ = false;
     std::string host_;
     std::string connected_host_;
     GaggiMateStatus status_{};

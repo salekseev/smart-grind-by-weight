@@ -17,12 +17,19 @@ class WebOtaInterlockTest(unittest.TestCase):
         # session state machine after admission is exercised by other tests.
         grind_start = function(grind_source, "bool GrindController::start_grind(")
         grind_start = grind_start.split("    // Finish pending history writes", 1)[0] + "return true;\n}"
+        http_source = (ROOT / "src/network/http_support.cpp").read_text()
+        http_header = (ROOT / "src/network/http_support.h").read_text()
+        # The upload pumps its body through the production http::stream_body.
+        body_pump = "\n".join(re.findall(r"^constexpr \w+ BODY_\w+ = [^;]+;$", http_header, re.M))
+        body_pump += "\n" + function(http_source, "bool stream_body(httpd_req_t* request, const BodySink& sink)")
         header = (ROOT / "src/network/device_web_server.h").read_text()
         header = re.sub(r'^#(?:include|pragma).*$', '', header, flags=re.M).replace("private:", "public:")
         constants = "\n".join(re.findall(r"^constexpr \w+ (?:OTA|UPDATE_CHECK)_\w+ = [^;]+;$", source, re.M))
         methods = "\n".join(function(source, sig) for sig in (
             "bool DeviceWebServer::request_ota_preparation()",
             "bool DeviceWebServer::is_ota_ready() const",
+            "bool DeviceWebServer::device_busy() const",
+            "bool DeviceWebServer::internal_heap_ok() const",
             "void DeviceWebServer::recover_from_ota_failure()",
             "void DeviceWebServer::finish_ota(",
             "esp_err_t DeviceWebServer::handle_ota_upload(",
@@ -92,6 +99,10 @@ void load(httpd_req_t& r, char magic='\xE9') {
 }
 uint32_t now = 100;
 uint32_t millis() { return now; }
+namespace http {
+using BodySink = std::function<bool(const uint8_t* data, size_t length)>;
+''' + body_pump + r'''
+}
 ''' + constants + r'''
 constexpr int MALLOC_CAP_INTERNAL=1, MALLOC_CAP_8BIT=2, pdPASS=1;
 size_t free_heap=100000;

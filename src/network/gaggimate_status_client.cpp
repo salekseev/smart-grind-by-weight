@@ -17,7 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "../config/logging.h"
+#include "../config/constants.h"
 
 namespace {
 
@@ -78,20 +78,19 @@ bool parse_string(const std::string& json, const char* key, char* output, size_t
     return true;
 }
 
-bool valid_host(const std::string& host) {
+}  // namespace
+
+GaggiMateStatusClient gaggimate_status_client;
+
+bool GaggiMateStatusClient::is_valid_host(const std::string& host) {
     if (host.empty() || host.length() > 63) return false;
-    for (size_t index = 0; index < host.length(); ++index) {
-        const char value = host[index];
+    for (const char value : host) {
         if (!isalnum(static_cast<unsigned char>(value)) && value != '.' && value != '-') {
             return false;
         }
     }
     return true;
 }
-
-}  // namespace
-
-GaggiMateStatusClient gaggimate_status_client;
 
 void GaggiMateStatusClient::init() {
     if (!mutex_) mutex_ = xSemaphoreCreateMutex();
@@ -105,7 +104,7 @@ void GaggiMateStatusClient::init() {
 }
 
 bool GaggiMateStatusClient::configure(bool enabled, const std::string& host) {
-    if ((!host.empty() && !valid_host(host)) || (enabled && host.empty())) return false;
+    if ((!host.empty() && !is_valid_host(host)) || (enabled && host.empty())) return false;
     if (enabled && !ensure_task()) return false;
 
     Preferences preferences;
@@ -162,19 +161,18 @@ void GaggiMateStatusClient::task_loop() {
         bool enabled = false;
         std::string host;
         read_configuration(enabled, host);
-        if (enabled && network_manager.is_connected() && valid_host(host)) {
+        if (enabled && network_manager.is_connected() && is_valid_host(host)) {
+            // One critical section per tick: this loop runs at 50 Hz purely to
+            // notice that the 5 s HTTP fallback is not yet due.
             bool reconnect = false;
             uint32_t last_success_ms = 0;
             if (mutex_) xSemaphoreTake(mutex_, portMAX_DELAY);
-            reconnect = reconnect_requested_ || !websocket_started_ || connected_host_ != host;
+            reconnect = reconnect_requested_ || websocket_ == nullptr || connected_host_ != host;
             reconnect_requested_ = false;
             last_success_ms = last_success_ms_;
             if (mutex_) xSemaphoreGive(mutex_);
             if (reconnect) start_websocket(host);
             const uint32_t now_ms = millis();
-            if (mutex_) xSemaphoreTake(mutex_, portMAX_DELAY);
-            last_success_ms = last_success_ms_;
-            if (mutex_) xSemaphoreGive(mutex_);
             if (last_success_ms == 0 || now_ms - last_success_ms >= HTTP_FALLBACK_INTERVAL_MS) {
                 if (last_http_poll_ms_ == 0 || now_ms - last_http_poll_ms_ >= HTTP_FALLBACK_INTERVAL_MS) {
                     last_http_poll_ms_ = now_ms;
@@ -220,7 +218,6 @@ void GaggiMateStatusClient::start_websocket(const std::string& host) {
 
     connected_host_ = host;
     last_http_poll_ms_ = 0;
-    websocket_started_ = true;
 }
 
 void GaggiMateStatusClient::stop_websocket() {
@@ -229,7 +226,6 @@ void GaggiMateStatusClient::stop_websocket() {
         esp_websocket_client_destroy(websocket_);
         websocket_ = nullptr;
     }
-    websocket_started_ = false;
     connected_host_.clear();
 }
 

@@ -72,6 +72,7 @@ private:
                              const char* mode);
 
     FILE* file_ = nullptr;
+    bool writable_ = false;  // only a write handle needs flushing before stat
     void* dir_ = nullptr;  // DIR*, kept opaque so callers need no dirent.h
     std::string path_;     // partition-absolute
     std::string mount_path_;
@@ -88,7 +89,6 @@ public:
      */
     bool begin(bool format_if_mount_failed = false);
     void end();
-    bool is_mounted() const { return mounted_; }
 
     /** Open a file, or a directory when `mode` describes a read. */
     FsFile open(const char* path, const char* mode = "r");
@@ -98,10 +98,10 @@ public:
     bool rename(const char* from, const char* to);
     bool mkdir(const char* path);
 
-    /** Absolute VFS path for `path`, for the few places that need raw stdio. */
+private:
+    /** Absolute VFS path for `path`. */
     std::string to_vfs_path(const char* path) const;
 
-private:
     bool mounted_ = false;
 };
 

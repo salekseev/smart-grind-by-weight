@@ -7,7 +7,7 @@
 #include "../config/constants.h"
 #include "../controllers/grind_controller.h" // For FlashOpRequest and LogMessage structures
 
-// FsFile I/O operation types
+// File I/O operation types
 enum class FileIOOperationType {
     FLASH_OPERATION,        // Flash operations (start/end grind session)
     LOG_MESSAGE,           // Log message output
@@ -33,7 +33,7 @@ struct FileIORequest {
 };
 
 /**
- * FileIOTask - Dedicated FsFile I/O and Storage Operations
+ * FileIOTask - Dedicated File I/O and Storage Operations
  * 
  * Extracted from GrindController queues to create a focused, low-priority task
  * that handles ALL file system operations without blocking real-time tasks.
@@ -60,7 +60,7 @@ private:
     // Inter-task communication
     QueueHandle_t file_io_queue;
     
-    // FsFile I/O state
+    // File I/O state
     bool filesystem_available;
     uint32_t total_operations_processed;
     uint32_t failed_operations_count;
@@ -112,7 +112,7 @@ public:
     
 private:
     
-    // FsFile I/O operation processing
+    // File I/O operation processing
     void process_file_io_operations();
     void process_flash_operation(const FlashOpRequest& request);
     void process_log_message(const LogMessage& message);

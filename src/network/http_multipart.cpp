@@ -56,6 +56,7 @@ bool MultipartReader::begin(const std::string& content_type) {
     if (value.empty()) return false;
 
     boundary_ = "--" + value;
+    delimiter_ = std::string(kCrLf) + boundary_;
     state_ = State::SEEK_FIRST_BOUNDARY;
     pending_.clear();
     filename_.clear();
@@ -112,8 +113,7 @@ bool MultipartReader::feed(const uint8_t* data, size_t length, const DataCallbac
         }
 
         // State::PART_DATA
-        const std::string delimiter = std::string(kCrLf) + boundary_;
-        const size_t position = pending_.find(delimiter);
+        const size_t position = pending_.find(delimiter_);
         if (position == std::string::npos) {
             // Forward everything that cannot be the start of the delimiter.
             if (pending_.size() > retain_length()) {
@@ -135,7 +135,7 @@ bool MultipartReader::feed(const uint8_t* data, size_t length, const DataCallbac
             saw_file_ = true;
             bytes_forwarded_ += position;
         }
-        pending_.erase(0, position + delimiter.size());
+        pending_.erase(0, position + delimiter_.size());
         state_ = State::PART_HEADERS;
     }
 }

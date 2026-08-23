@@ -27,6 +27,7 @@ constexpr uint8_t kSetupIp[4] = {4, 4, 4, 1};
 constexpr uint8_t kSetupNetmask[4] = {255, 255, 255, 0};
 
 constexpr uint16_t kMaxScanResults = 20;
+constexpr char kDefaultHostname[] = "smartgrind";
 
 std::string ip4_to_string(const esp_ip4_addr_t& address) {
     char text[16] = {};
@@ -270,6 +271,13 @@ std::string SmartGrindNetworkManager::access_point_ip() const {
     return ip4_to_string(info.ip);
 }
 
+uint32_t SmartGrindNetworkManager::access_point_ip_v4() const {
+    if (state() != NetworkState::WIFI_SETUP_AP || !access_point_netif_) return 0;
+    esp_netif_ip_info_t info = {};
+    if (esp_netif_get_ip_info(access_point_netif_, &info) != ESP_OK) return 0;
+    return ntohl(info.ip.addr);
+}
+
 std::vector<WifiScanResult> SmartGrindNetworkManager::scan_networks() {
     std::vector<WifiScanResult> results;
     if (!wifi_started_) return results;
@@ -313,7 +321,7 @@ void SmartGrindNetworkManager::load_settings() {
     password_ = preferences_ ? preferences_->getString("wifi_pass", "") : std::string();
     hostname_ = preferences_ ? sanitize_hostname(preferences_->getString("wifi_host", ""))
                              : std::string();
-    if (hostname_.empty()) hostname_ = default_hostname();
+    if (hostname_.empty()) hostname_ = kDefaultHostname;
 }
 
 void SmartGrindNetworkManager::begin_connection() {
@@ -449,10 +457,6 @@ void SmartGrindNetworkManager::stop_network() {
 void SmartGrindNetworkManager::set_state(NetworkState state) {
     state_.store(state);
     state_changed_at_ms_ = millis();
-}
-
-std::string SmartGrindNetworkManager::default_hostname() {
-    return "smartgrind";
 }
 
 std::string SmartGrindNetworkManager::sanitize_hostname(const std::string& hostname) {

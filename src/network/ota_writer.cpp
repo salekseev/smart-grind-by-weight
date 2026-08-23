@@ -2,7 +2,7 @@
 
 #include <esp_err.h>
 
-#include "../config/logging.h"
+#include "../config/constants.h"
 
 bool OtaWriter::fail(const char* reason) {
     error_ = reason;

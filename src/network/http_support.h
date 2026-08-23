@@ -69,6 +69,13 @@ esp_err_t send_file(httpd_req_t* request, const char* path, const char* content_
 /** Read the whole request body, refusing anything larger than `max_bytes`. */
 bool read_body(httpd_req_t* request, std::string& body, size_t max_bytes);
 
+/**
+ * Pump the request body through `sink` in chunks, for payloads far larger than
+ * free memory. Returns false when the socket fails or `sink` aborts.
+ */
+using BodySink = std::function<bool(const uint8_t* data, size_t length)>;
+bool stream_body(httpd_req_t* request, const BodySink& sink);
+
 /** Look up a URL query parameter. */
 bool query_param(httpd_req_t* request, const char* key, std::string& value);
 bool has_query_param(httpd_req_t* request, const char* key);

@@ -7,7 +7,7 @@
 #include <deque>
 #include <vector>
 
-#include "../config/logging.h"
+#include "../config/constants.h"
 #include "../storage/filesystem.h"
 
 namespace http {
@@ -49,17 +49,19 @@ const char* status_line(int status) {
 /** Locate `key` in a `&`-separated key=value list, returning its raw value. */
 bool find_pair(const std::string& pairs, const char* key, std::string& value,
                bool& present) {
-    const std::string needle = key;
+    const size_t key_length = strlen(key);
     size_t position = 0;
     while (position <= pairs.size()) {
         const size_t end = pairs.find('&', position);
-        const std::string pair =
-            pairs.substr(position, end == std::string::npos ? std::string::npos : end - position);
-        const size_t equals = pair.find('=');
-        const std::string name = equals == std::string::npos ? pair : pair.substr(0, equals);
-        if (name == needle) {
+        const size_t stop = end == std::string::npos ? pairs.size() : end;
+        const size_t equals = pairs.find('=', position);
+        const size_t name_end = (equals == std::string::npos || equals > stop) ? stop : equals;
+        // Compare in place: a settings POST looks up ~60 fields in one body.
+        if (name_end - position == key_length &&
+            pairs.compare(position, key_length, key) == 0) {
             present = true;
-            value = equals == std::string::npos ? std::string() : pair.substr(equals + 1);
+            value = name_end == stop ? std::string()
+                                     : pairs.substr(name_end + 1, stop - name_end - 1);
             return true;
         }
         if (end == std::string::npos) break;
@@ -101,7 +103,10 @@ std::string url_decode(const std::string& value) {
 
 }  // namespace
 
-bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handler handler) {
+namespace {
+
+bool register_route(httpd_handle_t server, const char* uri, httpd_method_t method,
+                    Handler handler, bool websocket) {
     if (!server || !uri) return false;
 
     handler_store().push_back(std::move(handler));
@@ -110,36 +115,28 @@ bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handle
     descriptor.method = method;
     descriptor.handler = dispatch;
     descriptor.user_ctx = &handler_store().back();
+    descriptor.is_websocket = websocket;
+    // Control frames reach the handler so a client close can drop its slot.
+    descriptor.handle_ws_control_frames = websocket;
 
     const esp_err_t err = httpd_register_uri_handler(server, &descriptor);
     if (err != ESP_OK) {
-        LOG_BLE("[WEB] Could not register %s: %s\n", uri, esp_err_to_name(err));
+        LOG_BLE("[WEB] Could not register %s%s: %s\n", websocket ? "WebSocket " : "", uri,
+                esp_err_to_name(err));
         handler_store().pop_back();
         return false;
     }
     return true;
 }
 
+}  // namespace
+
+bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handler handler) {
+    return register_route(server, uri, method, std::move(handler), false);
+}
+
 bool websocket_route(httpd_handle_t server, const char* uri, Handler handler) {
-    if (!server || !uri) return false;
-
-    handler_store().push_back(std::move(handler));
-    httpd_uri_t descriptor = {};
-    descriptor.uri = uri;
-    descriptor.method = HTTP_GET;
-    descriptor.handler = dispatch;
-    descriptor.user_ctx = &handler_store().back();
-    descriptor.is_websocket = true;
-    // Control frames are handled here so a client close can drop its slot.
-    descriptor.handle_ws_control_frames = true;
-
-    const esp_err_t err = httpd_register_uri_handler(server, &descriptor);
-    if (err != ESP_OK) {
-        LOG_BLE("[WEB] Could not register WebSocket %s: %s\n", uri, esp_err_to_name(err));
-        handler_store().pop_back();
-        return false;
-    }
-    return true;
+    return register_route(server, uri, HTTP_GET, std::move(handler), true);
 }
 
 bool not_found(httpd_handle_t server, Handler handler) {
@@ -203,23 +200,32 @@ esp_err_t send_file(httpd_req_t* request, const char* path, const char* content_
     return httpd_resp_send_chunk(request, nullptr, 0);
 }
 
-bool read_body(httpd_req_t* request, std::string& body, size_t max_bytes) {
-    const size_t total = request->content_len;
-    if (total > max_bytes) return false;
-
-    body.clear();
-    body.reserve(total);
-    char chunk[512];
-    size_t remaining = total;
+bool stream_body(httpd_req_t* request, const BodySink& sink) {
+    // 2 KB keeps the peak allocation small; uploads run while Bluetooth has been
+    // torn down to free internal RAM.
+    std::vector<uint8_t> chunk(2048);
+    size_t remaining = request->content_len;
     while (remaining > 0) {
         const int received =
-            httpd_req_recv(request, chunk, remaining < sizeof(chunk) ? remaining : sizeof(chunk));
+            httpd_req_recv(request, reinterpret_cast<char*>(chunk.data()),
+                           remaining < chunk.size() ? remaining : chunk.size());
         if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
         if (received <= 0) return false;
-        body.append(chunk, static_cast<size_t>(received));
         remaining -= static_cast<size_t>(received);
+        if (!sink(chunk.data(), static_cast<size_t>(received))) return false;
     }
     return true;
+}
+
+bool read_body(httpd_req_t* request, std::string& body, size_t max_bytes) {
+    if (request->content_len > max_bytes) return false;
+
+    body.clear();
+    body.reserve(request->content_len);
+    return stream_body(request, [&body](const uint8_t* data, size_t length) {
+        body.append(reinterpret_cast<const char*>(data), length);
+        return true;
+    });
 }
 
 bool query_param(httpd_req_t* request, const char* key, std::string& value) {

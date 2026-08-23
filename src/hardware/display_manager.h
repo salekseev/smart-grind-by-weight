@@ -86,7 +86,6 @@ private:
     static void display_metrics_cb(lv_event_t* e);
     static void touchpad_read_cb(lv_indev_t* indev, lv_indev_data_t* data);
     bool filter_touch_for_panel_wake(const TouchData& touch);
-    static uint32_t millis_cb();
 };
 
 extern DisplayManager* g_display_manager;

@@ -1,7 +1,6 @@
 #include "grind_logging.h"
 #include "session_file.h"
 #include <string>
-#include "../system/string_utils.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -508,13 +507,10 @@ void GrindLogger::print_session_data_table() {
             const int MAX_DISPLAY = 10; // Limit display for readability
             
             while (file && displayed < MAX_DISPLAY) {
-                std::string filename = file.name();
-                if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
-                    // Check if filename has proper format
-                    int start_pos = strings::index_of(filename, '_') + 1;
-                    int end_pos = strings::last_index_of(filename, '.');
-                    if (start_pos > 0 && end_pos > start_pos) {
-                        
+                const std::string filename = file.name();
+                uint32_t session_id = 0;
+                if (parse_session_filename(filename.c_str(), session_id)) {
+                    {
                         // Read session file
                         std::string full_path = std::string(GRIND_SESSIONS_DIR) + "/" + filename;
                         FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
@@ -796,7 +792,8 @@ void GrindLogger::print_comprehensive_debug() {
             
             while (dirFile && !found_session) {
                 std::string filename = dirFile.name();
-                if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
+                uint32_t session_id = 0;
+                if (parse_session_filename(filename.c_str(), session_id)) {
                     std::string full_path = std::string(GRIND_SESSIONS_DIR) + "/" + filename;
                     FsFile file = filesystem.open(full_path.c_str(), "r");
                     if (file) {
@@ -923,7 +920,7 @@ void GrindLogger::print_comprehensive_debug() {
 }
 #endif // ENABLE_GRIND_DEBUG
 
-// ========== Individual Session FsFile Management Functions ==========
+// ========== Individual Session File Management Functions ==========
 
 bool GrindLogger::ensure_sessions_directory_exists() {
     // Check if directory exists

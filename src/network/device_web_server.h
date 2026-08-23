@@ -48,9 +48,6 @@ public:
     std::string latest_release_tag() const;
     bool install_available_update();
 
-    /** The running HTTP server, or nullptr before begin() succeeds. */
-    httpd_handle_t server() const { return server_; }
-
 private:
     httpd_handle_t server_ = nullptr;
     bool initialized_ = false;
@@ -80,6 +77,10 @@ private:
     ProfileController* profile_controller_ = nullptr;
 
     void configure_routes();
+    /** True while a grind, a BLE transfer or another update (or its reboot) is pending. */
+    bool device_busy() const;
+    /** True when enough internal RAM is free to flash an image. */
+    bool internal_heap_ok() const;
     esp_err_t handle_ota_upload(httpd_req_t* request);
     esp_err_t handle_screensaver_upload(httpd_req_t* request);
     bool start_github_ota(const std::string& tag);

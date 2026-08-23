@@ -69,17 +69,6 @@ bool extract_json_uint(const char* json, const char* key, uint32_t& value) {
     return true;
 }
 
-bool valid_local_host(const std::string& host) {
-    if (host.empty() || host.length() > 63) return false;
-    for (size_t index = 0; index < host.length(); ++index) {
-        const char value = host[index];
-        if (!isalnum(static_cast<unsigned char>(value)) && value != '.' && value != '-') {
-            return false;
-        }
-    }
-    return true;
-}
-
 const char* api_phase_name(const GrindController& controller) {
     switch (controller.get_phase()) {
         case GrindPhase::IDLE:
@@ -154,6 +143,17 @@ void DeviceApi::update() {
     const uint32_t now = millis();
     if (now - last_publish_ms_ < PUBLISH_INTERVAL_MS) return;
     last_publish_ms_ = now;
+
+    // Nothing to publish to, and building the frame costs several double
+    // conversions plus a heap walk. Zero clients is the steady state.
+    bool any_client = false;
+    for (const auto& slot : client_fds_) {
+        if (slot.load() != NO_CLIENT) {
+            any_client = true;
+            break;
+        }
+    }
+    if (!any_client) return;
 
     const std::string message = build_state_message();
     for (size_t index = 0; index < MAX_CLIENTS; ++index) {
@@ -694,7 +694,7 @@ esp_err_t DeviceApi::queue_settings_update(httpd_req_t* request) {
                  (screensaver_style == "orbit" || screensaver_style == "minimal" ||
                   screensaver_style == "blank" ||
                   (screensaver_style == "custom" && filesystem.exists(BLE_IMAGE_FILENAME)) ||
-                  (screensaver_style == "gaggimate" && valid_local_host(gaggimate_host)));
+                  (screensaver_style == "gaggimate" && GaggiMateStatusClient::is_valid_host(gaggimate_host)));
     for (int i = 0; i < 3 && valid; ++i) {
         valid = std::isfinite(settings.profile_weights[i]) &&
                 profile_controller_->is_weight_valid(settings.profile_weights[i]) &&
@@ -826,13 +826,6 @@ void DeviceApi::refresh_settings_cache() {
         preferences.end();
         return value;
     };
-    auto read_brightness = [](const char* key, float fallback) {
-        Preferences preferences;
-        if (!preferences.begin("brightness", true)) return fallback;
-        const float value = preferences.getFloat(key, fallback);
-        preferences.end();
-        return value;
-    };
     auto read_float = [](const char* name_space, const char* key, float fallback) {
         Preferences preferences;
         if (!preferences.begin(name_space, true)) return fallback;
@@ -884,8 +877,8 @@ void DeviceApi::refresh_settings_cache() {
              grind_controller_->get_motor_response_latency(),
              read_bool("logging", "enabled", true) ? "true" : "false",
              read_bool("swipe", "enabled", false) ? "true" : "false",
-             static_cast<int>(read_brightness("normal", USER_SCREEN_BRIGHTNESS_NORMAL) * 100.0f + 0.5f),
-             static_cast<int>(read_brightness("screensaver", USER_SCREEN_BRIGHTNESS_DIMMED) * 100.0f + 0.5f),
+             static_cast<int>(read_float("brightness", "normal", USER_SCREEN_BRIGHTNESS_NORMAL) * 100.0f + 0.5f),
+             static_cast<int>(read_float("brightness", "screensaver", USER_SCREEN_BRIGHTNESS_DIMMED) * 100.0f + 0.5f),
              read_bool("screensaver", "startup", false) ? "true" : "false",
              read_bool("screensaver", "sleep", false) ? "true" : "false",
              screensaver_timing.idle_timeout_s, screensaver_timing.startup_timeout_s,

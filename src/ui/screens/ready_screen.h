@@ -2,10 +2,6 @@
 #include <lvgl.h>
 #include <string>
 
-// The device build and the desktop simulator now share one string type; the
-// alias remains because the screen's public API is written in terms of it.
-using ReadyScreenText = std::string;
-
 #include "../../config/constants.h"
 #include "../../controllers/grind_mode.h"
 
@@ -24,9 +20,9 @@ private:
     lv_obj_t* wifi_detail_label;
     lv_obj_t* wifi_qr;
     lv_obj_t* menu_tab;
-    ReadyScreenText wifi_status_text;
-    ReadyScreenText wifi_detail_text;
-    ReadyScreenText wifi_qr_payload;
+    std::string wifi_status_text;
+    std::string wifi_detail_text;
+    std::string wifi_qr_payload;
     bool visible;
 
 public:

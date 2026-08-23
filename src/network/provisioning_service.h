@@ -24,7 +24,6 @@ public:
 
     void update();
 
-    bool is_active() const { return active_; }
     const std::string& access_point_ssid() const { return ap_ssid_; }
     const std::string& access_point_password() const { return ap_password_; }
 

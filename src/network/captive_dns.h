@@ -20,7 +20,6 @@ public:
     /** Start answering queries with `address`, given in host byte order. */
     bool start(uint32_t address);
     void stop();
-    bool is_running() const { return task_ != nullptr; }
 
 private:
     static void task_entry(void* context);

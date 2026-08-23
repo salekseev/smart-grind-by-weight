@@ -13,14 +13,6 @@
 
 namespace {
 
-bool ready_text_empty(const ReadyScreenText& value) {
-#ifdef SMART_GRIND_SIM
-    return value.empty();
-#else
-    return value.empty();
-#endif
-}
-
 // Long enough to show several frames on hardware while remaining much more
 // responsive than LVGL's 200-400 ms default scroll timing.
 constexpr uint32_t READY_TAB_SWIPE_ANIMATION_MS = 180;
@@ -195,9 +187,9 @@ void ReadyScreen::create_wifi_page(lv_obj_t* parent) {
 void ReadyScreen::update_network_status() {
     if (!wifi_status_label || !wifi_detail_label || !wifi_qr) return;
 
-    ReadyScreenText status;
-    ReadyScreenText detail;
-    ReadyScreenText qr_payload;
+    std::string status;
+    std::string detail;
+    std::string qr_payload;
 #ifdef SMART_GRIND_SIM
     status = "WI-FI SIMULATED";
     detail = "smartgrind.local\n192.168.50.160";
@@ -240,9 +232,9 @@ void ReadyScreen::update_network_status() {
     }
 #endif
 
-    const ReadyScreenText& rendered_status = status;
-    const ReadyScreenText& rendered_detail = detail;
-    const ReadyScreenText& rendered_qr = qr_payload;
+    const std::string& rendered_status = status;
+    const std::string& rendered_detail = detail;
+    const std::string& rendered_qr = qr_payload;
     if (rendered_status != wifi_status_text) {
         lv_label_set_text(wifi_status_label, rendered_status.c_str());
         wifi_status_text = rendered_status;
@@ -251,7 +243,7 @@ void ReadyScreen::update_network_status() {
         lv_label_set_text(wifi_detail_label, rendered_detail.c_str());
         wifi_detail_text = rendered_detail;
     }
-    if (ready_text_empty(rendered_qr)) {
+    if (rendered_qr.empty()) {
         lv_obj_add_flag(wifi_qr, LV_OBJ_FLAG_HIDDEN);
     } else {
         if (rendered_qr != wifi_qr_payload) {

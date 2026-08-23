@@ -1,5 +1,4 @@
 #include "manager.h"
-#include "../system/string_utils.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <cmath>
@@ -26,6 +25,7 @@
 #include "../config/grind_control.h"
 #include "../config/build_info.h"
 #include "../logging/grind_logging.h"
+#include "../logging/session_file.h"
 #include "../hardware/hardware_manager.h"
 #include "../hardware/WeightSensor.h"
 #include "../controllers/grind_controller.h"
@@ -521,7 +521,7 @@ void BluetoothManager::send_next_data_chunk() {
     
     // Check if file transfer is complete
     if (!has_data) {
-        log("Bluetooth Data: FsFile transfer complete for session %lu - sent %d chunks.\n", current_file_session_id, current_chunk);
+        log("Bluetooth Data: File transfer complete for session %lu - sent %d chunks.\n", current_file_session_id, current_chunk);
         data_export_in_progress = false;
         current_chunk = 0;
         current_file_session_id = 0;
@@ -785,12 +785,13 @@ void BluetoothManager::handle_ota_control_command(NimBLECharacteristic* characte
 
 void BluetoothManager::handle_ota_data_chunk(NimBLECharacteristic* characteristic) {
     if (!ota_handler.is_ota_active()) return;
-    
-    const std::string data = characteristic->getValue();
-    size_t chunk_size = data.length();
-    if (chunk_size == 0) return;
-    
-    if (!ota_handler.process_data_chunk((const uint8_t*)data.c_str(), chunk_size)) {
+
+    // Thousands of chunks per image. Keep the attribute value as-is instead of
+    // converting to std::string, which would copy the payload a second time.
+    const NimBLEAttValue data = characteristic->getValue();
+    if (data.size() == 0) return;
+
+    if (!ota_handler.process_data_chunk(data.data(), data.size())) {
         set_ota_status(BLE_OTA_ERROR);
     }
 }
@@ -961,8 +962,8 @@ void BluetoothManager::onWrite(NimBLECharacteristic* characteristic,
     } else if (characteristic == data_transfer_characteristic) {
         // Image data chunks arrive here (writes to data transfer characteristic)
         if (image_handler.is_upload_active()) {
-            const std::string value = characteristic->getValue();
-            if (value.length() > 0 && !image_handler.process_chunk((const uint8_t*)value.c_str(), value.length())) {
+            const NimBLEAttValue value = characteristic->getValue();
+            if (value.size() > 0 && !image_handler.process_chunk(value.data(), value.size())) {
                 set_image_status(BLE_IMG_STATUS_ERROR);
             }
         }
@@ -1843,16 +1844,9 @@ void BluetoothManager::generate_diagnostic_report() {
             if (session_ids) {
                 FsFile file = dir.openNextFile();
                 while (file && count < MAX_SESSIONS) {
-                    std::string filename = file.name();
-                    if ((strings::starts_with(filename, "session_") ||
-                         strings::contains(filename, "/session_")) &&
-                        strings::ends_with(filename, ".bin")) {
-                        const int start_pos = strings::index_of(filename, '_') + 1;
-                        const int end_pos = strings::last_index_of(filename, '.');
-                        if (start_pos > 0 && end_pos > start_pos) {
-                            session_ids[count++] =
-                                strings::to_uint32(strings::slice(filename, start_pos, end_pos));
-                        }
+                    uint32_t session_id = 0;
+                    if (parse_session_filename(file.name(), session_id)) {
+                        session_ids[count++] = session_id;
                     }
                     file = dir.openNextFile();
                 }
