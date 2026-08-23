@@ -149,10 +149,10 @@ The ESP-IDF component manager then resolves the managed dependencies listed in
   search path so LVGL finds `lv_conf.h`
 - `src/CMakeLists.txt` - registers the firmware as the main component
 - `src/idf_component.yml` - managed dependencies (LVGL, littlefs, NimBLE-C++,
-  mdns, esp_websocket_client, esp_lcd_co5300)
+  mdns, esp_websocket_client, esp_lcd_co5300, improv)
 - `sdkconfig.defaults` - CPU, PSRAM, partitions, BLE, TLS and FreeRTOS settings;
   per-environment overrides go in `custom_sdkconfig` in `platformio.ini`
-- `components/` - vendored local components (delta, detools, improv)
+- `components/` - vendored delta OTA components (delta, detools)
 
 `sdkconfig.<environment>` files are generated and are not checked in. Delete one
 to pick up an edited `sdkconfig.defaults`.

@@ -54,8 +54,8 @@ python3 tools/grinder.py analyze
   silently drops the fonts the UI needs (`CONFIG_LV_CONF_SKIP=n`).
 - `src/CMakeLists.txt` registers the firmware as the main component.
 - `src/idf_component.yml` pins the managed dependencies: LVGL, littlefs,
-  esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300.
-- `components/` holds the vendored local components: delta, detools, improv.
+  esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300, improv.
+- `components/` holds the vendored delta OTA pair: delta and detools.
 - `sdkconfig.defaults` carries CPU, PSRAM, partition, BLE, TLS and FreeRTOS
   settings. `CONFIG_FREERTOS_HZ=1000` is required: the control loops run on
   20/25/50 ms periods and would otherwise quantise to 10 ms steps. Generated

@@ -20,3 +20,7 @@ dependencies:
   # Network services
   espressif/mdns: "==1.11.3"
   espressif/esp_websocket_client: "==1.8.0"
+
+  # Improv serial provisioning. Published by the upstream project itself, with
+  # native ESP-IDF component support, so there is nothing to vendor.
+  improv/improv: "==1.2.6"

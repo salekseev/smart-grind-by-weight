@@ -1,6 +1,6 @@
 # The firmware sources form the project's main ESP-IDF component. Third-party
-# dependencies are declared in idf_component.yml; delta/detools live under
-# components/ and are picked up automatically.
+# dependencies are declared in idf_component.yml; the delta OTA pair under
+# components/ is picked up automatically.
 file(GLOB_RECURSE app_sources
      "${CMAKE_CURRENT_LIST_DIR}/*.c"
      "${CMAKE_CURRENT_LIST_DIR}/*.cpp")

@@ -357,10 +357,10 @@ bool ProvisioningService::handle_improv_command(const improv::ImprovCommand& com
         case improv::GET_NETWORK_STATE: {
             uint8_t flags = improv::NETWORK_SUPPORTS_WIFI;
             std::vector<std::string> values;
-            // NOTE: the flags go out as decimal text, which is what this
-            // firmware has always sent. The Improv specification asks for a raw
-            // bitfield byte here, so this is worth revisiting separately - it is
-            // a wire-format change rather than part of the framework migration.
+            // Every element of an Improv RPC response is a length-prefixed
+            // string, and the specification defines this first element as the
+            // flags byte "encoded decimal string" - clients parse it with a
+            // base-10 conversion, so "3" is correct rather than the raw 0x03.
             if (network_manager.is_connected()) {
                 flags |= improv::NETWORK_IS_ONLINE;
                 values.push_back(std::to_string(flags));
