@@ -166,7 +166,7 @@ bool SmartGrindNetworkManager::set_enabled(bool enabled) {
     if (!preferences_) return false;
 
     enabled_.store(enabled);
-    if (preferences_->putBool("wifi_on", enabled) == 0) return false;
+    if (!preferences_->putBool("wifi_on", enabled)) return false;
 
     if (!enabled) {
         stop_network();
@@ -187,11 +187,13 @@ bool SmartGrindNetworkManager::set_credentials(const std::string& ssid,
 
     if (settings_mutex_) xSemaphoreTake(settings_mutex_, portMAX_DELAY);
     const std::string previous_password = password_;
-    if (preferences_->putString("wifi_pass", password) == 0) {
+    // An open network stores an empty password, so success cannot be inferred
+    // from how many bytes were written.
+    if (!preferences_->putString("wifi_pass", password)) {
         if (settings_mutex_) xSemaphoreGive(settings_mutex_);
         return false;
     }
-    if (preferences_->putString("wifi_ssid", ssid) == 0) {
+    if (!preferences_->putString("wifi_ssid", ssid)) {
         preferences_->putString("wifi_pass", previous_password);
         if (settings_mutex_) xSemaphoreGive(settings_mutex_);
         return false;

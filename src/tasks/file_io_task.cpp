@@ -253,10 +253,10 @@ void FileIOTask::process_preference_write(const char* key, const char* value) {
     // Write preference/setting to persistent storage
     Preferences prefs;
     if (prefs.begin("grinder", false)) {
-        size_t written = prefs.putString(key, value);
+        const bool written = prefs.putString(key, value);
         prefs.end();
-        
-        if (written == 0) {
+
+        if (!written) {
             LOG_BLE("WARNING: Failed to write preference %s=%s\n", key, value);
             failed_operations_count++;
         } else {

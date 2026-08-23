@@ -1254,8 +1254,7 @@ void GrindController::save_motor_latency(float value) {
     }
 
     motor_response_latency_ms = value;
-    size_t written = preferences->putFloat("motor_lat_ms", value);
-    if (written == 0) {
+    if (!preferences->putFloat("motor_lat_ms", value)) {
         LOG_BLE("ERROR: Failed to save motor latency to NVS\n");
     } else {
         LOG_BLE("Motor latency: Saved %.1fms to preferences\n", value);
@@ -1311,8 +1310,7 @@ void GrindController::save_coast_ratio(float value) {
     }
 
     coast_ratio_ = value;
-    size_t written = preferences->putFloat(PREF_KEY_COAST_RATIO, value);
-    if (written == 0) {
+    if (!preferences->putFloat(PREF_KEY_COAST_RATIO, value)) {
         LOG_BLE("ERROR: Failed to save coast ratio to NVS\n");
     } else {
         LOG_BLE("Coast ratio: Saved %.2f to preferences\n", value);

@@ -16,6 +16,12 @@ line. Earlier release history remains available in the original project's
   firmware is roughly 20% smaller and leaves more RAM free for grinding and the
   interface.
 
+### Wi-Fi
+
+- Fixed open Wi-Fi networks, which have no password, failing to save. The setup
+  page and Improv provisioning both offered a blank password field, then
+  reported the attempt as a storage failure and kept the grinder offline.
+
 ### Display and screensaver
 
 - The startup screensaver image now also appears on V2 grinders, which
