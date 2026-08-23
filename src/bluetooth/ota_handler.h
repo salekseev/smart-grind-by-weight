@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../storage/preferences.h"
 #include <cstdint>
+#include <string>
+
+#include "../storage/preferences.h"
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_app_format.h>
-#include <soc/rtc.h>
-#include <esp_pm.h>
 #include "../system/operation_interlock.h"
 
 // Include detools/delta libraries
@@ -54,7 +54,7 @@ private:
     uint32_t patch_size;
     uint32_t received_size;
     BLEOTAStatus current_status;
-    String current_firmware_build_number;
+    std::string current_firmware_build_number;
     bool is_full_update;
     
     // OTA tracking
@@ -94,7 +94,9 @@ public:
      * @param is_full_update True for full update, false for delta update
      * @return true if successfully started
      */
-    bool start_ota(uint32_t size, const String& expected_build_number = "", bool is_full_update = false, const String& expected_firmware_version = "");
+    bool start_ota(uint32_t size, const std::string& expected_build_number = "",
+                   bool is_full_update = false,
+                   const std::string& expected_firmware_version = "");
     
     /**
      * Process received OTA data chunk
@@ -133,7 +135,7 @@ public:
     /**
      * Get current firmware build number
      */
-    const String& get_build_number() const { return current_firmware_build_number; }
+    const std::string& get_build_number() const { return current_firmware_build_number; }
     
     /**
      * Enable reduced power mode for BLE operations
@@ -149,5 +151,5 @@ public:
      * Check if OTA failed after reboot and return expected build number if so
      * @return Expected build number if OTA failed, empty string if no failure or no expectation
      */
-    String check_ota_failure_after_boot();
+    std::string check_ota_failure_after_boot();
 };

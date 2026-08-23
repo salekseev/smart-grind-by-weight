@@ -78,6 +78,18 @@ inline float to_float(const std::string& value) {
     return std::strtof(value.c_str(), nullptr);
 }
 
+/** Replace every occurrence of `needle`, which Arduino's String::replace did. */
+inline std::string replace_all(std::string value, const std::string& needle,
+                              const std::string& replacement) {
+    if (needle.empty()) return value;
+    size_t position = 0;
+    while ((position = value.find(needle, position)) != std::string::npos) {
+        value.replace(position, needle.size(), replacement);
+        position += replacement.size();
+    }
+    return value;
+}
+
 /** Drop leading and trailing ASCII whitespace. */
 inline std::string trim(const std::string& value) {
     size_t first = 0;

@@ -17,6 +17,7 @@ STUBS = r'''
 #include <stdexcept>
 #include "system/operation_interlock.h"
 #include "system/device_info.h"
+#include "system/string_utils.h"
 #define LOG_BLE(...) ((void)0)
 #define LOG_OTA_DEBUG(...) ((void)0)
 #define BUILD_NUMBER 1
@@ -29,20 +30,11 @@ STUBS = r'''
 constexpr int ESP_OK = 0;
 constexpr int PARTITION_PAGE_SIZE=4096;
 constexpr int ESP_PARTITION_TYPE_DATA=1, ESP_PARTITION_SUBTYPE_DATA_SPIFFS=130;
-struct String {
-    std::string text;
-    String(const char* s=""): text(s) {}
-    String(int n): text(std::to_string(n)) {}
-    bool isEmpty() const { return text.empty(); }
-    const char* c_str() const { return text.c_str(); }
-    int toInt() const { return std::stoi(text); }
-    bool operator!=(const String& other) const { return text != other.text; }
-};
 struct Preferences {
-    std::map<std::string, String> values;
-    void putString(const char* k, String v) { values[k]=v; }
-    String getString(const char* k, const char* fallback) {
-        return values.count(k) ? values[k] : String(fallback);
+    std::map<std::string, std::string> values;
+    void putString(const char* k, const std::string& v) { values[k]=v; }
+    std::string getString(const char* k, const char* fallback) {
+        return values.count(k) ? values[k] : std::string(fallback);
     }
     void remove(const char* k) { values.erase(k); }
 };

@@ -1,4 +1,5 @@
 #include "WeightSensor.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <freertos/FreeRTOS.h>
@@ -423,7 +424,7 @@ int32_t WeightSensor::get_raw_adc_smoothed(uint32_t window_ms) const {
 uint32_t WeightSensor::get_adc_headroom_counts() const {
     const int32_t raw = diagnostic_raw_adc_.load();
     if (raw < 0 || raw > kAdcMaximumRaw) return 0;
-    return static_cast<uint32_t>(min(raw, kAdcMaximumRaw - raw));
+    return static_cast<uint32_t>(std::min(raw, kAdcMaximumRaw - raw));
 }
 
 bool WeightSensor::is_adc_near_saturation() const {

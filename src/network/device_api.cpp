@@ -1,7 +1,7 @@
 #include "device_api.h"
+#include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
-#include <freertos/FreeRTOS.h>
 #include <cstdint>
 #include <cstdio>
 #include <esp_system.h>

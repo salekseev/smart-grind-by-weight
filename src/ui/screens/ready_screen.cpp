@@ -1,4 +1,5 @@
 #include "ready_screen.h"
+#include <string>
 #include <cstdint>
 #include <cstdio>
 #include "../../config/constants.h"
@@ -16,7 +17,7 @@ bool ready_text_empty(const ReadyScreenText& value) {
 #ifdef SMART_GRIND_SIM
     return value.empty();
 #else
-    return value.isEmpty();
+    return value.empty();
 #endif
 }
 
@@ -32,8 +33,8 @@ void shorten_tab_scroll_animation(lv_event_t* event) {
 }
 
 #ifndef SMART_GRIND_SIM
-String escape_wifi_qr_value(const String& value) {
-    String escaped;
+std::string escape_wifi_qr_value(const std::string& value) {
+    std::string escaped;
     escaped.reserve(value.length() + 8);
     for (size_t i = 0; i < value.length(); ++i) {
         const char ch = value[i];
@@ -226,13 +227,13 @@ void ReadyScreen::update_network_status() {
             break;
         case NetworkState::WIFI_SETUP_AP: {
             status = "CONNECT WI-FI";
-            const String& ssid = provisioning_service.access_point_ssid();
-            const String& password = provisioning_service.access_point_password();
+            const std::string& ssid = provisioning_service.access_point_ssid();
+            const std::string& password = provisioning_service.access_point_password();
             detail = "Scan with your phone, then use the sign-in page.\n" + ssid;
             qr_payload = "WIFI:T:";
-            qr_payload += password.isEmpty() ? "nopass" : "WPA";
+            qr_payload += password.empty() ? "nopass" : "WPA";
             qr_payload += ";S:" + escape_wifi_qr_value(ssid);
-            if (!password.isEmpty()) qr_payload += ";P:" + escape_wifi_qr_value(password);
+            if (!password.empty()) qr_payload += ";P:" + escape_wifi_qr_value(password);
             qr_payload += ";;";
             break;
         }

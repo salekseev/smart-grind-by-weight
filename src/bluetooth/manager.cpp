@@ -1,11 +1,11 @@
 #include "manager.h"
+#include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "../system/device_info.h"
 #include "../system/timing.h"
@@ -134,121 +134,121 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     last_disconnect_time = enable_time; // Start disconnected timeout from enable time
     
     // Initialize BLE with delays for power stability
-    BLEDevice::init(BLE_DEVICE_NAME);
+    NimBLEDevice::init(BLE_DEVICE_NAME);
     
     // Request a larger MTU to improve throughput when the client supports it.
     // Some platforms (e.g., macOS/iOS) may ignore this request and keep a lower MTU.
     // That's fine — we also keep chunk sizes small and paced below.
-    BLEDevice::setMTU(517);
+    NimBLEDevice::setMTU(517);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_STACK_DELAY_MS));
     
-    ble_server = BLEDevice::createServer();
+    ble_server = NimBLEDevice::createServer();
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVER_DELAY_MS));
     ble_server->setCallbacks(this);
     
     // Create OTA service
-    ota_service = ble_server->createService(BLEUUID(BLE_OTA_SERVICE_UUID), 12);
+    ota_service = ble_server->createService(BLE_OTA_SERVICE_UUID);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
     
     ota_data_characteristic = ota_service->createCharacteristic(
         BLE_OTA_DATA_CHAR_UUID,
-        BLECharacteristic::PROPERTY_WRITE
+        NIMBLE_PROPERTY::WRITE
     );
     ota_data_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     ota_control_characteristic = ota_service->createCharacteristic(
         BLE_OTA_CONTROL_CHAR_UUID,
-        BLECharacteristic::PROPERTY_WRITE
+        NIMBLE_PROPERTY::WRITE
     );
     ota_control_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     ota_status_characteristic = ota_service->createCharacteristic(
         BLE_OTA_STATUS_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     build_number_characteristic = ota_service->createCharacteristic(
         BLE_OTA_BUILD_NUMBER_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ
+        NIMBLE_PROPERTY::READ
     );
     build_number_characteristic->setValue(ota_handler.get_build_number().c_str());
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     // Create data service (also used for image upload)
-    data_service = ble_server->createService(BLEUUID(BLE_DATA_SERVICE_UUID), 12);
+    data_service = ble_server->createService(BLE_DATA_SERVICE_UUID);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
     
     data_control_characteristic = data_service->createCharacteristic(
         BLE_DATA_CONTROL_CHAR_UUID,
-        BLECharacteristic::PROPERTY_WRITE
+        NIMBLE_PROPERTY::WRITE
     );
     data_control_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     data_transfer_characteristic = data_service->createCharacteristic(
         BLE_DATA_TRANSFER_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
     );
     data_transfer_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     data_status_characteristic = data_service->createCharacteristic(
         BLE_DATA_STATUS_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     // Create debug service (Nordic UART)
-    debug_service = ble_server->createService(BLEUUID(BLE_DEBUG_SERVICE_UUID), 8);
+    debug_service = ble_server->createService(BLE_DEBUG_SERVICE_UUID);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
 
     debug_rx_characteristic = debug_service->createCharacteristic(
         BLE_DEBUG_RX_CHAR_UUID,
-        BLECharacteristic::PROPERTY_WRITE
+        NIMBLE_PROPERTY::WRITE
     );
     debug_rx_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
 
     debug_tx_characteristic = debug_service->createCharacteristic(
         BLE_DEBUG_TX_CHAR_UUID,
-        BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     // Create system info service
-    sysinfo_service = ble_server->createService(BLEUUID(BLE_SYSINFO_SERVICE_UUID), 15);
+    sysinfo_service = ble_server->createService(BLE_SYSINFO_SERVICE_UUID);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVICE_DELAY_MS));
     
     sysinfo_system_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_SYSTEM_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     sysinfo_performance_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_PERFORMANCE_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     sysinfo_hardware_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_HARDWARE_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
     
     sysinfo_sessions_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_SESSIONS_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
 
     sysinfo_diagnostics_characteristic = sysinfo_service->createCharacteristic(
         BLE_SYSINFO_DIAGNOSTICS_CHAR_UUID,
-        BLECharacteristic::PROPERTY_WRITE
+        NIMBLE_PROPERTY::WRITE
     );
     sysinfo_diagnostics_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
@@ -265,23 +265,13 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     sysinfo_service->start();
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
 
-    BLEAdvertising* advertising = BLEDevice::getAdvertising();
-    advertising->addServiceUUID(BLE_OTA_SERVICE_UUID);
-    advertising->addServiceUUID(BLE_DEBUG_SERVICE_UUID);
-    advertising->addServiceUUID(BLE_DATA_SERVICE_UUID);
-    advertising->addServiceUUID(BLE_SYSINFO_SERVICE_UUID);
-    advertising->setScanResponse(true);
-    advertising->setMinPreferred(0x06);
-    advertising->setMinPreferred(0x12);
-    
-    // Set advertised name in both advertising data and scan response data
+    // The device name is the only payload: the four 128-bit service UUIDs do not
+    // fit in a 31-byte advertisement, and both the Python tool and the web
+    // flasher discover the grinder by name and resolve services after connecting.
+    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
     advertising->setName(BLE_DEVICE_NAME);
-    BLEAdvertisementData adv;
-    adv.setName(BLE_DEVICE_NAME);
-    advertising->setAdvertisementData(adv);
-    BLEAdvertisementData sr;
-    sr.setName(BLE_DEVICE_NAME);
-    advertising->setScanResponseData(sr);
+    advertising->setPreferredParams(0x06, 0x12);
+    advertising->enableScanResponse(true);
     
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_ADVERTISING_DELAY_MS));
     
@@ -331,7 +321,7 @@ void BluetoothManager::disable() {
     vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_ADVERTISING_DELAY_MS));
 
     log("Bluetooth: Deinitializing BLE stack...\n");
-    BLEDevice::deinit(false);
+    NimBLEDevice::deinit(false);
     vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_DEINIT_DELAY_MS));
     ble_server = nullptr;
     ota_service = nullptr;
@@ -397,13 +387,13 @@ void BluetoothManager::handle() {
 
 void BluetoothManager::start_advertising() {
     if (ble_enabled && ble_server) {
-        BLEDevice::startAdvertising();
+        NimBLEDevice::startAdvertising();
     }
 }
 
 void BluetoothManager::stop_advertising() {
     if (ble_enabled) {
-        BLEDevice::stopAdvertising();
+        NimBLEDevice::stopAdvertising();
     }
 }
 
@@ -697,8 +687,8 @@ void BluetoothManager::set_data_status(BLEDataStatus status) {
     }
 }
 
-void BluetoothManager::handle_ota_control_command(BLECharacteristic* characteristic) {
-    String data = characteristic->getValue();
+void BluetoothManager::handle_ota_control_command(NimBLECharacteristic* characteristic) {
+    const std::string data = characteristic->getValue();
     if (data.length() == 0) return;
 
     uint8_t command = data[0];
@@ -728,14 +718,14 @@ void BluetoothManager::handle_ota_control_command(BLECharacteristic* characteris
                 update_ui_status("Receiving update...");
                 
                 // Parse build number if present
-                String expected_build = "";
-                String expected_firmware_version = "";
+                std::string expected_build;
+                std::string expected_firmware_version;
                 size_t offset = 7;
                 
                 if (data.length() > 6) {
                     uint8_t build_length = data[6];
                     if (build_length > 0 && data.length() >= offset + build_length) {
-                        expected_build = String(data.c_str() + offset, build_length);
+                        expected_build = std::string(data.c_str() + offset, build_length);
                         log("Bluetooth OTA: Expected build after update: %s\n", expected_build.c_str());
                         offset += build_length;
                     }
@@ -745,7 +735,7 @@ void BluetoothManager::handle_ota_control_command(BLECharacteristic* characteris
                         uint8_t version_length = data[offset];
                         offset++;
                         if (version_length > 0 && data.length() >= offset + version_length) {
-                            expected_firmware_version = String(data.c_str() + offset, version_length);
+                            expected_firmware_version = std::string(data.c_str() + offset, version_length);
                             log("Bluetooth OTA: Expected firmware version after update: %s\n", expected_firmware_version.c_str());
                         }
                     }
@@ -789,10 +779,10 @@ void BluetoothManager::handle_ota_control_command(BLECharacteristic* characteris
     }
 }
 
-void BluetoothManager::handle_ota_data_chunk(BLECharacteristic* characteristic) {
+void BluetoothManager::handle_ota_data_chunk(NimBLECharacteristic* characteristic) {
     if (!ota_handler.is_ota_active()) return;
     
-    String data = characteristic->getValue();
+    const std::string data = characteristic->getValue();
     size_t chunk_size = data.length();
     if (chunk_size == 0) return;
     
@@ -801,8 +791,8 @@ void BluetoothManager::handle_ota_data_chunk(BLECharacteristic* characteristic) 
     }
 }
 
-void BluetoothManager::handle_debug_command(BLECharacteristic* characteristic) {
-    String value = characteristic->getValue();
+void BluetoothManager::handle_debug_command(NimBLECharacteristic* characteristic) {
+    const std::string value = characteristic->getValue();
     if (value.length() > 0) {
         uint8_t command = value[0];
         switch (command) {
@@ -833,8 +823,8 @@ void BluetoothManager::handle_debug_command(BLECharacteristic* characteristic) {
     }
 }
 
-void BluetoothManager::handle_data_control_command(BLECharacteristic* characteristic) {
-    String data = characteristic->getValue();
+void BluetoothManager::handle_data_control_command(NimBLECharacteristic* characteristic) {
+    const std::string data = characteristic->getValue();
     if (data.length() == 0) return;
     
     uint8_t command = data[0];
@@ -913,7 +903,7 @@ void BluetoothManager::handle_data_control_command(BLECharacteristic* characteri
 }
 
 // BLE Callbacks
-void BluetoothManager::onConnect(BLEServer* server) {
+void BluetoothManager::onConnect(NimBLEServer* server, NimBLEConnInfo& conn_info) {
     device_connected = true;
     log("BLE: Client connected - timeout paused while connected\n");
     mark_sessions_info_dirty();
@@ -926,7 +916,8 @@ void BluetoothManager::onConnect(BLEServer* server) {
     }
 }
 
-void BluetoothManager::onDisconnect(BLEServer* server) {
+void BluetoothManager::onDisconnect(NimBLEServer* server, NimBLEConnInfo& conn_info,
+                                   int reason) {
     device_connected = false;
     last_disconnect_time = millis(); // Reset timeout countdown from now
 
@@ -951,7 +942,8 @@ void BluetoothManager::onDisconnect(BLEServer* server) {
     start_advertising();
 }
 
-void BluetoothManager::onWrite(BLECharacteristic* characteristic) {
+void BluetoothManager::onWrite(NimBLECharacteristic* characteristic,
+                              NimBLEConnInfo& conn_info) {
     if (characteristic == ota_control_characteristic) {
         handle_ota_control_command(characteristic);
     } else if (characteristic == ota_data_characteristic) {
@@ -965,7 +957,7 @@ void BluetoothManager::onWrite(BLECharacteristic* characteristic) {
     } else if (characteristic == data_transfer_characteristic) {
         // Image data chunks arrive here (writes to data transfer characteristic)
         if (image_handler.is_upload_active()) {
-            String value = characteristic->getValue();
+            const std::string value = characteristic->getValue();
             if (value.length() > 0 && !image_handler.process_chunk((const uint8_t*)value.c_str(), value.length())) {
                 set_image_status(BLE_IMG_STATUS_ERROR);
             }
@@ -978,11 +970,12 @@ void BluetoothManager::onWrite(BLECharacteristic* characteristic) {
     }
 }
 
-void BluetoothManager::onRead(BLECharacteristic* characteristic) {
+void BluetoothManager::onRead(NimBLECharacteristic* characteristic,
+                             NimBLEConnInfo& conn_info) {
     // Reserved for future use
 }
 
-void BluetoothManager::handle_image_control_command(uint8_t command, const String& value) {
+void BluetoothManager::handle_image_control_command(uint8_t command, const std::string& value) {
     switch (command) {
         case BLE_IMG_CMD_START: {
             if (device_web_server.is_ota_active() ||
@@ -1038,7 +1031,7 @@ void BluetoothManager::set_image_status(BLEImageStatus status) {
     data_status_characteristic->notify();
 }
 
-void BluetoothManager::handle_screensaver_settings_command(uint8_t command, const String& value) {
+void BluetoothManager::handle_screensaver_settings_command(uint8_t command, const std::string& value) {
     if (is_data_channel_busy_for_settings()) {
         LOG_BLE("Screensaver settings: rejected command 0x%02X while data channel is busy\n", command);
         send_screensaver_settings_error(BLE_SETTINGS_ERROR_BUSY);
@@ -1142,7 +1135,7 @@ bool BluetoothManager::is_data_channel_busy_for_settings() const {
            image_handler.is_upload_active();
 }
 
-String BluetoothManager::check_ota_failure_after_boot() {
+std::string BluetoothManager::check_ota_failure_after_boot() {
     return ota_handler.check_ota_failure_after_boot();
 }
 
@@ -1773,7 +1766,7 @@ void BluetoothManager::generate_diagnostic_report() {
                         break;
                     }
                     case NVS_TYPE_STR: {
-                        String val = pref.getString(info.key, "");
+                        std::string val = pref.getString(info.key, "");
                         snprintf(buf, sizeof(buf), "    %s: \"%s\" (string)\n", info.key, val.c_str());
                         break;
                     }
@@ -1846,7 +1839,7 @@ void BluetoothManager::generate_diagnostic_report() {
             if (session_ids) {
                 FsFile file = dir.openNextFile();
                 while (file && count < MAX_SESSIONS) {
-                    String filename = file.name();
+                    std::string filename = file.name();
                     if ((filename.startsWith("session_") || filename.indexOf("/session_") != -1) && filename.endsWith(".bin")) {
                         int start_pos = filename.indexOf('_') + 1;
                         int end_pos = filename.lastIndexOf('.');

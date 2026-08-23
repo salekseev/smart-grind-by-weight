@@ -1,4 +1,5 @@
 #include "screensaver_controller.h"
+#include <string>
 #include <cstdint>
 #include <cstdio>
 #include "../../config/constants.h"
@@ -43,11 +44,11 @@ bool ScreensaverController::has_custom_image() const {
     return valid;
 }
 
-String ScreensaverController::selected_style() const {
-    const String fallback = has_custom_image() ? "custom" : "minimal";
+std::string ScreensaverController::selected_style() const {
+    const std::string fallback = has_custom_image() ? "custom" : "minimal";
     Preferences preferences;
     if (!preferences.begin("screensaver", true)) return fallback;
-    const String style = preferences.getString("style", fallback);
+    const std::string style = preferences.getString("style", fallback);
     preferences.end();
     if (style == "custom" || style == "minimal" || style == "orbit" ||
         style == "blank" || style == "gaggimate") {
@@ -142,7 +143,7 @@ void ScreensaverController::hide() {
     visible_ = false;
 }
 
-bool ScreensaverController::create_builtin(const String& style) {
+bool ScreensaverController::create_builtin(const std::string& style) {
     if (style == "blank") return true;
 
     primary_label_ = lv_label_create(overlay_screen_);

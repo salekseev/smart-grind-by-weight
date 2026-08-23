@@ -1,5 +1,7 @@
 #include "grind_logging.h"
 #include "session_file.h"
+#include <string>
+#include "../system/string_utils.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -506,15 +508,15 @@ void GrindLogger::print_session_data_table() {
             const int MAX_DISPLAY = 10; // Limit display for readability
             
             while (file && displayed < MAX_DISPLAY) {
-                String filename = file.name();
-                if (filename.startsWith("session_") && filename.endsWith(".bin")) {
+                std::string filename = file.name();
+                if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
                     // Check if filename has proper format
-                    int start_pos = filename.indexOf('_') + 1;
-                    int end_pos = filename.lastIndexOf('.');
+                    int start_pos = strings::index_of(filename, '_') + 1;
+                    int end_pos = strings::last_index_of(filename, '.');
                     if (start_pos > 0 && end_pos > start_pos) {
                         
                         // Read session file
-                        String full_path = String(GRIND_SESSIONS_DIR) + "/" + filename;
+                        std::string full_path = std::string(GRIND_SESSIONS_DIR) + "/" + filename;
                         FsFile sessionFile = filesystem.open(full_path.c_str(), "r");
                         if (sessionFile) {
                             TimeSeriesSessionHeader header;
@@ -577,7 +579,7 @@ bool GrindLogger::clear_all_sessions_from_flash() {
             LOG_BLE("Skipping subdirectory: %s\n", file.path());
             file = dir.openNextFile();
         } else {
-            String filePath = file.path();
+            std::string filePath = file.path();
             LOG_BLE(" - Deleting file: %s\n", filePath.c_str());
             
             // Close the file handle before attempting deletion
@@ -793,9 +795,9 @@ void GrindLogger::print_comprehensive_debug() {
             bool found_session = false;
             
             while (dirFile && !found_session) {
-                String filename = dirFile.name();
-                if (filename.startsWith("session_") && filename.endsWith(".bin")) {
-                    String full_path = String(GRIND_SESSIONS_DIR) + "/" + filename;
+                std::string filename = dirFile.name();
+                if (strings::starts_with(filename, "session_") && strings::ends_with(filename, ".bin")) {
+                    std::string full_path = std::string(GRIND_SESSIONS_DIR) + "/" + filename;
                     FsFile file = filesystem.open(full_path.c_str(), "r");
                     if (file) {
                         LOG_BLE("Reading from: %s\n", filename.c_str());
