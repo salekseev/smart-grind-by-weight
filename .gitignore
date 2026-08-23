@@ -31,5 +31,9 @@ tools/database/
 tools/database/grinder_data.db
 failed_session_*.bin
 
+# Local agent/editor tool state
+.claude/
+.serena/
+
 # Git worktrees
 .worktrees/
