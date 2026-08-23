@@ -51,6 +51,7 @@ private:
     httpd_handle_t server_ = nullptr;
     bool initialized_ = false;
     bool started_ = false;
+    bool start_failure_reported_ = false;
     std::atomic<bool> ota_active_{false};
     std::atomic<OtaPreparationState> ota_preparation_state_{OtaPreparationState::IDLE};
     std::atomic<uint32_t> ota_preparation_deadline_ms_{0};

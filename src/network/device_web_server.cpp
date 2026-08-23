@@ -213,8 +213,13 @@ void DeviceWebServer::begin() {
 
     const esp_err_t err = httpd_start(&server_, &config);
     if (err != ESP_OK) {
-        LOG_BLE("[WEB] HTTP service failed to start: %s\n", esp_err_to_name(err));
         server_ = nullptr;
+        // begin() is retried from the service loop, so only report the first
+        // failure rather than filling the diagnostic log every few milliseconds.
+        if (!start_failure_reported_) {
+            start_failure_reported_ = true;
+            LOG_BLE("[WEB] HTTP service failed to start: %s\n", esp_err_to_name(err));
+        }
         return;
     }
 
@@ -390,9 +395,9 @@ void DeviceWebServer::request_ota_preparation() {
 void DeviceWebServer::recover_from_ota_failure() {
     ota_preparation_state_.store(OtaPreparationState::IDLE);
     if (ota_bluetooth_stopped_.exchange(false)) {
-        // Re-enabling the BLE stack in the same boot duplicates services and
-        // leaks heap, so recover through a clean reboot into the still-valid
-        // running firmware instead.
+        // Bluetooth was torn down to free internal memory for the update. After
+        // a failed attempt, restarting the still-valid running firmware is a
+        // cheaper way back to a known-good state than unwinding by hand.
         LOG_BLE("[WEB OTA] Scheduling clean recovery restart\n");
         reboot_at_ms_.store(millis() + OTA_REBOOT_DELAY_MS);
         reboot_pending_.store(true);
