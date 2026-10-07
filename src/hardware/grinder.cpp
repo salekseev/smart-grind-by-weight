@@ -4,6 +4,7 @@
 #include "../controllers/grind_events.h"
 #include "../config/constants.h"
 #include <driver/gpio.h>
+#include <esp_log.h>
 #include <algorithm>
 #include <iterator>
 #if DEBUG_ENABLE_LOADCELL_MOCK
@@ -40,6 +41,10 @@ void Grinder::init(int pin) {
     gpio_reset_pin(static_cast<gpio_num_t>(motor_pin));
     gpio_set_direction(static_cast<gpio_num_t>(motor_pin), GPIO_MODE_OUTPUT);
     gpio_set_level(static_cast<gpio_num_t>(motor_pin), 0);
+    // is_pulse_complete() polls with a zero timeout every control tick, and the
+    // driver logs each still-running transmission as an error. Real failures
+    // are reported from the return codes checked here and in the pulse paths.
+    esp_log_level_set("rmt", ESP_LOG_NONE);
     if (rmt_new_tx_channel(&tx_chan_config, &rmt_channel) != ESP_OK) return;
     rmt_copy_encoder_config_t encoder_config{};
     if (rmt_new_copy_encoder(&encoder_config, &current_encoder) != ESP_OK) {

@@ -9,7 +9,7 @@ wait that times out returns the bytes gathered so far, or -ESP_ERR_HTTP_EAGAIN
 when there are none. A peer close (FIN) returns the bytes gathered so far, or
 ESP_FAIL when there are none and the body is incomplete. The call returns 0
 only once the whole body has arrived. Time passes only while a read is blocked
-or the task is delayed, so every elapsed-time assertion is exact.
+so every elapsed-time assertion is exact.
 """
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,8 +21,9 @@ from controller_serialization_test import function
 
 ROOT = Path(__file__).resolve().parents[2]
 PARTITION_SIZE = 0x200000
-READ_TIMEOUT_MS = 15000
-UINT32_MAX = 2**32 - 1
+# The per-read wait that the production download configures on its client.
+READ_TIMEOUT_MS = int(re.search(r"OTA_READ_TIMEOUT_MS = (\d+);",
+                                (ROOT / "src/network/device_web_server.cpp").read_text()).group(1))
 
 HARNESS = r'''
 #include "config/constants.h"  // production LOG_BLE and HW_RELEASE_FIRMWARE_SUFFIX
@@ -53,21 +54,16 @@ void diagnostic_log_printf(const char* format, ...) {
     va_end(args);
 }
 
-// ---- Fake clock: only blocked reads and task delays advance it ----
+// ---- Fake clock: only blocked reads advance it ----
 constexpr uint32_t FAKE_RUN_LIMIT_MS = 10U * 60U * 1000U;
 uint32_t clock_ms = 0;
 uint32_t run_started_ms = 0;
-uint32_t millis() { return clock_ms; }
 uint32_t elapsed_ms() { return clock_ms - run_started_ms; }
 void advance_clock(uint32_t ms) {
     clock_ms += ms;
     check(elapsed_ms() <= FAKE_RUN_LIMIT_MS, "download still running after 10 minutes");
 }
 
-typedef uint32_t TickType_t;
-#define configTICK_RATE_HZ 1000  // CONFIG_FREERTOS_HZ in sdkconfig.defaults
-#define pdMS_TO_TICKS(ms) ((TickType_t)((TickType_t)(ms) * configTICK_RATE_HZ / 1000U))
-void vTaskDelay(TickType_t ticks) { advance_clock(ticks * 1000U / configTICK_RATE_HZ); }
 
 // ---- esp_err.h ----
 typedef int esp_err_t;
@@ -94,9 +90,8 @@ struct HardwareManager {
 // ---- esp_ota_ops.h ----
 struct esp_partition_t {
     uint32_t size;
-    const char* label;
 };
-const esp_partition_t inactive_partition{PARTITION_SIZE, "ota_1"};
+const esp_partition_t inactive_partition{PARTITION_SIZE};
 const esp_partition_t* esp_ota_get_next_update_partition(const esp_partition_t*) {
     return &inactive_partition;
 }
@@ -305,9 +300,7 @@ int main() {
         std::istringstream fields(line);
         std::string key;
         fields >> key;
-        if (key == "clock") {
-            fields >> clock_ms;
-        } else if (key == "status") {
+        if (key == "status") {
             fields >> http.status;
         } else if (key == "length") {
             fields >> http.content_length;
@@ -411,12 +404,12 @@ class OtaStreamTest(unittest.TestCase):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
-    def download(self, *events, status=200, length=None, clock=0, image_validates=True,
+    def download(self, *events, status=200, length=None, image_validates=True,
                  flash_write_fails=False):
         """Run perform_github_ota against a server sending `events` after the headers."""
         if length is None:
             length = sum(len(bytes.fromhex(e.split()[2])) for e in events if e.startswith("data"))
-        script = [f"clock {clock}", f"status {status}", f"length {length}", *events]
+        script = [f"status {status}", f"length {length}", *events]
         if not image_validates:
             script.append("invalid_image")
         if flash_write_fails:
@@ -550,18 +543,6 @@ class OtaStreamTest(unittest.TestCase):
                 self.assert_rejected_unopened(result)
                 self.assertEqual(result.http_reads, 0)
                 self.assertEqual(result.elapsed_ms, 0)
-
-    def test_millis_rollover_does_not_change_acceptance_or_timeout(self):
-        payload = image(5000)
-        start = UINT32_MAX - 10
-        with self.subTest("delayed body"):
-            result = self.download(data(40, payload), clock=start)
-            self.assert_installed(result, payload)
-            self.assertEqual(result.elapsed_ms, 40)
-        with self.subTest("missing body"):
-            result = self.download(length=len(payload), clock=start)
-            self.assert_rejected_unopened(result)
-            self.assertEqual(result.elapsed_ms, READ_TIMEOUT_MS)
 
 
 if __name__ == "__main__":

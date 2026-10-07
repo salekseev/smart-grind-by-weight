@@ -34,7 +34,6 @@ struct {
     void remove(const char*) { assert(!operation_interlock().try_acquire()); ++removes; }
     FsFile open(const char*, const char*) { assert(!operation_interlock().try_acquire()); ++opens; return {}; }
 } filesystem;
-auto& LittleFS = filesystem;  // same fake; main() reads its I/O counters by this name
 class AutoTuneController {
 public:
     WeightSensor* weight_sensor = &sensor;
@@ -58,7 +57,7 @@ int main() {
     auto competitor = operation_interlock().try_acquire();
     assert(!tuning.start());
     assert(!tuning.is_running && tuning.cancel_requested && tuning.operation_token == 0);
-    assert(LittleFS.opens == 0 && LittleFS.removes == 0 && tuning.phase_changes == 0);
+    assert(filesystem.opens == 0 && filesystem.removes == 0 && tuning.phase_changes == 0);
     assert(operation_interlock().owns(competitor));
     operation_interlock().release(competitor);
     tuning.weight_sensor = nullptr;
@@ -69,8 +68,8 @@ int main() {
     assert(tuning.start());
     assert(tuning.is_running && !tuning.cancel_requested && tuning.phase_changes == 1);
     assert(operation_interlock().owns(tuning.operation_token));
-    assert(LittleFS.opens == 1 && LittleFS.removes == 1);
-    assert(!tuning.start() && LittleFS.opens == 1 && tuning.phase_changes == 1);
+    assert(filesystem.opens == 1 && filesystem.removes == 1);
+    assert(!tuning.start() && filesystem.opens == 1 && tuning.phase_changes == 1);
     assert(operation_interlock().release(tuning.operation_token));
 }
 '''

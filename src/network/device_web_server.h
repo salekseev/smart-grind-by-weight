@@ -83,6 +83,8 @@ private:
     bool internal_heap_ok() const;
     esp_err_t handle_ota_upload(httpd_req_t* request);
     esp_err_t handle_screensaver_upload(httpd_req_t* request);
+    /** Take the prepared update window for one transfer; false when not ready. */
+    bool claim_prepared_update();
     bool start_github_ota(const std::string& tag);
     static void github_ota_task(void* parameter);
     void perform_github_ota(const std::string& tag);

@@ -33,12 +33,14 @@ class WebOtaInterlockTest(unittest.TestCase):
             "void DeviceWebServer::recover_from_ota_failure()",
             "void DeviceWebServer::finish_ota(",
             "esp_err_t DeviceWebServer::handle_ota_upload(",
+            "bool DeviceWebServer::claim_prepared_update()",
             "bool DeviceWebServer::start_github_ota(",
             "bool DeviceWebServer::install_available_update()",
             "void DeviceWebServer::update()",
         ))
         harness = r'''
 #include "system/operation_interlock.h"
+#include "system/device_info.h"
 #include "network/http_multipart.cpp" // The real streaming parser feeds the writer.
 #include <algorithm>
 #include <atomic>
@@ -104,10 +106,9 @@ using BodySink = std::function<bool(const uint8_t* data, size_t length)>;
 ''' + body_pump + r'''
 }
 ''' + constants + r'''
-constexpr int MALLOC_CAP_INTERNAL=1, MALLOC_CAP_8BIT=2, pdPASS=1;
+constexpr int pdPASS=1;
 size_t free_heap=100000;
-size_t heap_caps_get_free_size(int) { return free_heap; }
-namespace device_info { size_t free_internal_heap_bytes() { return free_heap; } }
+size_t device_info::free_internal_heap_bytes() { return free_heap; }
 struct { bool connected=true; bool is_connected() const { return connected; } } network_manager;
 enum class GrindMode { WEIGHT, TIME, MANUAL };
 enum class GrindPhase { IDLE, INITIALIZING };
@@ -150,8 +151,8 @@ struct BluetoothManager {
 struct Grinder { unsigned stops=0; void stop() { assert(!operation_interlock().try_acquire()); ++stops; } } motor;
 struct HardwareManager { Grinder* get_grinder() { return &motor; } } hardware;
 struct { void update() {} } device_api;
-struct { unsigned restarts=0; } ESP; // Counts esp_restart() calls.
-void esp_restart() { ++ESP.restarts; }
+unsigned restarts=0;
+void esp_restart() { ++restarts; }
 struct esp_partition_t { size_t size=1000000; } partition;
 const esp_partition_t* esp_ota_get_next_update_partition(void*) { return &partition; }
 // Mirrors OtaWriter: a failed write discards the open image itself and abort()
@@ -331,8 +332,8 @@ int main() {
     assert(web.is_ota_active() && web.reboot_pending_ && !operation_interlock().try_acquire());
     assert(!web.request_ota_preparation());
     httpd_req_t after; load(after); web.handle_ota_upload(&after); assert(after.status==409);
-    web.update(); assert(ESP.restarts==0);
-    now += OTA_REBOOT_DELAY_MS; web.update(); assert(ESP.restarts==1);
+    web.update(); assert(restarts==0);
+    now += OTA_REBOOT_DELAY_MS; web.update(); assert(restarts==1);
     operation_interlock().release(web.operation_token_); // Simulate boot, never used by production.
     // Bluetooth deinit recovery retains ownership until reboot too.
     DeviceWebServer recovery; setup(recovery); bluetooth.enabled=true;

@@ -1,6 +1,5 @@
 #pragma once
 #include "../storage/preferences.h"
-#include <string>
 #include <cstdint>
 #include <cstring>
 #include "../config/constants.h"

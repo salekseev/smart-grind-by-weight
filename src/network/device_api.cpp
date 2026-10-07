@@ -224,22 +224,19 @@ bool DeviceApi::process_commands() {
         // The acknowledgement is sent after unlocking: a WebSocket send can
         // block on a slow client, and the grind control loop needs this lock.
         auto control_lock = grind_controller_->lock_control();
-        const char* ack_action = nullptr;
-        bool ack_accepted = false;
-        const char* ack_reason = nullptr;
-        auto reply = [&](const char* action, bool accepted, const char* reason) {
-            ack_action = action;
-            ack_accepted = accepted;
-            ack_reason = reason;
-        };
+        struct {
+            const char* action = nullptr;
+            bool accepted = false;
+            const char* reason = nullptr;
+        } ack;
         switch (command.action) {
             case CommandAction::START: {
                 if (device_web_server.is_ota_active() || device_web_server.is_ota_preparing()) {
-                    reply("start", false, "firmware update is active");
+                    ack = {"start", false, "firmware update is active"};
                     break;
                 }
                 if (grind_controller_->get_phase() != GrindPhase::IDLE) {
-                    reply("start", false, "grinder is not idle");
+                    ack = {"start", false, "grinder is not idle"};
                     break;
                 }
                 const auto profile = profile_controller_->snapshot();
@@ -247,7 +244,7 @@ bool DeviceApi::process_commands() {
                 WeightSensor* sensor = hardware_->get_weight_sensor();
                 if (mode == GrindMode::WEIGHT &&
                     (!sensor || sensor->has_hardware_fault())) {
-                    reply("start", false, "load cell is not ready");
+                    ack = {"start", false, "load cell is not ready"};
                     break;
                 }
                 grind_controller_->set_grind_profile_id(profile.current_profile);
@@ -255,73 +252,73 @@ bool DeviceApi::process_commands() {
                 const uint32_t target_time_ms = static_cast<uint32_t>(
                     profile.profiles[profile.current_profile].time_seconds * 1000.0f + 0.5f);
                 const bool started = grind_controller_->start_grind(target_weight, target_time_ms, mode);
-                reply("start", started, started ? "grind started" : "grind could not start");
+                ack = {"start", started, started ? "grind started" : "grind could not start"};
                 break;
             }
             case CommandAction::START_MANUAL:
                 if (device_web_server.is_ota_active() || device_web_server.is_ota_preparing()) {
-                    reply("start_manual", false, "firmware update is active");
+                    ack = {"start_manual", false, "firmware update is active"};
                 } else if (grind_controller_->get_phase() != GrindPhase::IDLE) {
-                    reply("start_manual", false, "grinder is not idle");
+                    ack = {"start_manual", false, "grinder is not idle"};
                 } else {
                     const bool started = grind_controller_->start_grind(0.0f, 0, GrindMode::MANUAL);
-                    reply("start_manual", started,
-                             started ? "manual grind started" : "grind could not start");
+                    ack = {"start_manual", started,
+                           started ? "manual grind started" : "grind could not start"};
                 }
                 break;
             case CommandAction::STOP:
                 if (!grind_controller_->is_active()) {
-                    reply("stop", false, "grinder is not active");
+                    ack = {"stop", false, "grinder is not active"};
                 } else {
                     grind_controller_->stop_grind();
-                    reply("stop", true, "grind stopped");
+                    ack = {"stop", true, "grind stopped"};
                 }
                 break;
             case CommandAction::DISMISS:
                 if (grind_controller_->get_phase() != GrindPhase::COMPLETED &&
                     grind_controller_->get_phase() != GrindPhase::TIMEOUT) {
-                    reply("dismiss", false, "nothing to dismiss");
+                    ack = {"dismiss", false, "nothing to dismiss"};
                 } else {
                     grind_controller_->return_to_idle();
                     const bool dismissed = grind_controller_->get_phase() == GrindPhase::IDLE;
-                    reply("dismiss", dismissed,
-                             dismissed ? "result dismissed" : "history completion is pending");
+                    ack = {"dismiss", dismissed,
+                           dismissed ? "result dismissed" : "history completion is pending"};
                 }
                 break;
             case CommandAction::TARE: {
                 WeightSensor* sensor = hardware_->get_weight_sensor();
                 if (grind_controller_->get_phase() != GrindPhase::IDLE) {
-                    reply("tare", false, "grinder is not idle");
+                    ack = {"tare", false, "grinder is not idle"};
                 } else if (!sensor || sensor->has_hardware_fault() || sensor->get_sample_count() <= 0) {
-                    reply("tare", false, "load cell is not ready");
+                    ack = {"tare", false, "load cell is not ready"};
                 } else if (sensor->is_tare_in_progress()) {
-                    reply("tare", false, "tare is already in progress");
+                    ack = {"tare", false, "tare is already in progress"};
                 } else {
                     sensor->tareNoDelay();
-                    reply("tare", true, "tare started");
+                    ack = {"tare", true, "tare started"};
                 }
                 break;
             }
             case CommandAction::SELECT_PROFILE:
                 if (grind_controller_->get_phase() != GrindPhase::IDLE) {
-                    reply("select_profile", false, "grinder is not idle");
+                    ack = {"select_profile", false, "grinder is not idle"};
                     break;
                 }
                 profile_controller_->set_current_profile(command.profile_index);
                 settings_changed = true;
                 LOG_BLE("[WEB] Active profile changed to %s\n",
                         profile_controller_->get_current_name());
-                reply("select_profile", true, "profile selected");
+                ack = {"select_profile", true, "profile selected"};
                 break;
             case CommandAction::SET_MODE:
                 if (grind_controller_->get_phase() != GrindPhase::IDLE) {
-                    reply("set_mode", false, "grinder is not idle");
+                    ack = {"set_mode", false, "grinder is not idle"};
                     break;
                 }
                 profile_controller_->set_grind_mode(
                     command.grind_mode == 1 ? GrindMode::TIME : GrindMode::WEIGHT);
                 settings_changed = true;
-                reply("set_mode", true, "grind mode selected");
+                ack = {"set_mode", true, "grind mode selected"};
                 break;
             case CommandAction::APPLY_SETTINGS: {
                 settings_operation_token_ = operation_interlock().try_acquire();
@@ -338,7 +335,7 @@ bool DeviceApi::process_commands() {
             }
         }
         control_lock.unlock();
-        if (ack_action) send_ack(command, ack_action, ack_accepted, ack_reason);
+        if (ack.action) send_ack(command, ack.action, ack.accepted, ack.reason);
     }
     if (settings_changed) refresh_settings_cache();
     return settings_changed;

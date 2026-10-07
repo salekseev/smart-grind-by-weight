@@ -157,7 +157,6 @@ struct FakeFS {
         removed.push_back(path); return files.erase(path) != 0;
     }
 } filesystem;
-auto& LittleFS = filesystem;  // same fake; main() injects faults and inspects files by this name
 #define private public
 ''' + header + "\n" + data_header + r'''
 #undef private
@@ -173,7 +172,7 @@ void write_session(uint32_t id) {
     assert(grind_logger.write_individual_session_file(id, session, events, measurements));
 }
 std::shared_ptr<Node> file(uint32_t id) {
-    return LittleFS.files.at("/sessions/session_" + std::to_string(id) + ".bin");
+    return filesystem.files.at("/sessions/session_" + std::to_string(id) + ".bin");
 }
 int main() {
     Preferences preferences;
@@ -233,7 +232,7 @@ int main() {
         GrindSession session; session.session_id = 2;
         GrindEvent events[2]; GrindMeasurement measurements[3];
         assert(!grind_logger.write_individual_session_file(2, session, events, measurements));
-        assert(!LittleFS.files.count("/sessions/session_2.bin"));
+        assert(!filesystem.files.count("/sessions/session_2.bin"));
     }
     write_limit = SIZE_MAX;
 
@@ -248,11 +247,11 @@ int main() {
     DataStreamManager stream;
     uint32_t ids[12]{};
     auto malformed = std::make_shared<Node>(); malformed->name = "session_abc.bin";
-    LittleFS.directory_reads = {{malformed}};
+    filesystem.directory_reads = {{malformed}};
     assert_totals(0, 0, 0);
     assert(stream.get_total_sessions() == 0);
     assert(stream.get_session_list(ids, 12) == 0);
-    LittleFS.directory_reads.clear();
+    filesystem.directory_reads.clear();
     file(1)->bytes.resize(24);
     assert(stream.get_total_sessions() == 0);
     assert(stream.get_session_list(ids, 12) == 0);
@@ -277,24 +276,24 @@ int main() {
     // Retention ignores unrelated entries and sorts only initialized IDs.
     for (uint32_t i = 2; i <= 12; ++i) write_session(i);
     std::vector<std::shared_ptr<Node>> entries;
-    for (auto& pair : LittleFS.files) entries.push_back(pair.second);
+    for (auto& pair : filesystem.files) entries.push_back(pair.second);
     entries.push_back(malformed);
     auto directory = std::make_shared<Node>(); directory->name = "session_99.bin"; directory->directory = true;
     entries.push_back(directory);
-    LittleFS.directory_reads = {entries, {file(12)}}; LittleFS.directory_read = 0;
-    LittleFS.removed.clear();
+    filesystem.directory_reads = {entries, {file(12)}}; filesystem.directory_read = 0;
+    filesystem.removed.clear();
     grind_logger.cleanup_old_session_files();
-    assert(LittleFS.removed.empty()); // directory shrank between count and collect
-    LittleFS.directory_reads = {entries}; LittleFS.directory_read = 0;
+    assert(filesystem.removed.empty()); // directory shrank between count and collect
+    filesystem.directory_reads = {entries}; filesystem.directory_read = 0;
     auto version = grind_logger.session_storage_version;
-    LittleFS.fail_remove = true;
+    filesystem.fail_remove = true;
     grind_logger.cleanup_old_session_files();
-    assert(LittleFS.removed.empty() && grind_logger.session_storage_version == version);
-    LittleFS.fail_remove = false;
+    assert(filesystem.removed.empty() && grind_logger.session_storage_version == version);
+    filesystem.fail_remove = false;
     grind_logger.cleanup_old_session_files();
-    assert(LittleFS.removed.size() == 2);
-    assert(LittleFS.removed[0] == "/sessions/session_1.bin");
-    assert(LittleFS.removed[1] == "/sessions/session_2.bin");
+    assert(filesystem.removed.size() == 2);
+    assert(filesystem.removed[0] == "/sessions/session_1.bin");
+    assert(filesystem.removed[1] == "/sessions/session_2.bin");
     assert(grind_logger.session_storage_version == version + 1);
     grind_logger.cleanup(); assert(allocations.empty());
 }

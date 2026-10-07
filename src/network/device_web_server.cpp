@@ -2,7 +2,6 @@
 
 #include <esp_crt_bundle.h>
 #include <esp_err.h>
-#include <esp_heap_caps.h>
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
@@ -69,7 +68,8 @@ constexpr uint32_t UPDATE_CHECK_INTERVAL_MS = 30U * 60U * 1000U;
 constexpr uint32_t UPDATE_CHECK_RETRY_MS = 5U * 60U * 1000U;
 constexpr size_t UPDATE_CHECK_TASK_STACK = 10U * 1024U;
 constexpr size_t OTA_DOWNLOAD_BUFFER = 4096;
-constexpr int OTA_IDLE_TIMEOUT_MS = 15000;
+// esp_http_client_read waits this long for body data before failing.
+constexpr int OTA_READ_TIMEOUT_MS = 15000;
 // GitHub Pages mirrors every published release beneath this versioned path.
 // Using the mirror avoids the github.com -> release-assets.githubusercontent.com
 // redirect during a memory-constrained TLS session while retaining the exact
@@ -312,11 +312,9 @@ std::string DeviceWebServer::latest_release_tag() const {
 bool DeviceWebServer::install_available_update() {
     const std::lock_guard<std::recursive_mutex> ota_lock(ota_mutex_);
     if (!firmware_update_available() || latest_release_tag().empty() ||
-        !network_manager.is_connected() || device_busy() ||
-        ota_preparation_state_.load() != OtaPreparationState::IDLE) {
+        !request_ota_preparation()) {
         return false;
     }
-    if (!request_ota_preparation()) return false;
     on_device_update_pending_.store(true);
     return true;
 }
@@ -380,11 +378,9 @@ bool DeviceWebServer::is_ota_ready() const {
 
 bool DeviceWebServer::request_ota_preparation() {
     const std::lock_guard<std::recursive_mutex> ota_lock(ota_mutex_);
-    if (!initialized_ || !network_manager.is_connected() || is_ota_active() ||
+    if (!initialized_ || !network_manager.is_connected() || device_busy() ||
         firmware_update_check_active_.load() ||
-        ota_preparation_state_.load() != OtaPreparationState::IDLE ||
-        !grind_controller_ || grind_controller_->is_active() ||
-        (bluetooth_manager_ && bluetooth_manager_->is_transfer_active())) return false;
+        ota_preparation_state_.load() != OtaPreparationState::IDLE) return false;
     const auto token = operation_interlock().try_acquire();
     if (!token) return false;
     operation_token_ = token;
@@ -662,14 +658,20 @@ void DeviceWebServer::configure_routes() {
     });
 }
 
-bool DeviceWebServer::start_github_ota(const std::string& tag) {
+bool DeviceWebServer::claim_prepared_update() {
     const std::lock_guard<std::recursive_mutex> ota_lock(ota_mutex_);
     if (!is_ota_ready()) return false;
-    bool expected_inactive = false;
-    if (!ota_active_.compare_exchange_strong(expected_inactive, true)) return false;
+    // Every writer of ota_active_ holds ota_mutex_, and is_ota_ready() has just
+    // seen it clear, so no other claim can be in progress.
+    ota_active_.store(true);
     ota_preparation_state_.store(OtaPreparationState::IDLE);
     ota_received_.store(0);
     ota_total_.store(0);
+    return true;
+}
+
+bool DeviceWebServer::start_github_ota(const std::string& tag) {
+    if (!claim_prepared_update()) return false;
 
     auto* task_tag = new (std::nothrow) std::string(tag);
     if (!task_tag || xTaskCreate(github_ota_task, "github_ota", OTA_DOWNLOAD_TASK_STACK,
@@ -698,7 +700,7 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
 
     esp_http_client_config_t config = {};
     config.url = url.c_str();
-    config.timeout_ms = 15000;
+    config.timeout_ms = OTA_READ_TIMEOUT_MS;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.user_agent = "SmartGrind-OTA/1";
     config.disable_auto_redirect = false;
@@ -748,18 +750,14 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
     ota_total_.store(static_cast<size_t>(content_length));
     ota_received_.store(0);
 
-    uint32_t idle_deadline = millis() + OTA_IDLE_TIMEOUT_MS;
     while (ota_received_.load() < ota_total_.load()) {
+        // A read fails once OTA_READ_TIMEOUT_MS passes without data or the peer
+        // closes; it returns 0 only after the whole body has arrived.
         const int read = esp_http_client_read(client, reinterpret_cast<char*>(buffer.data()),
                                              buffer.size());
-        if (read < 0) {
+        if (read <= 0) {
             failed = true;
             break;
-        }
-        if (read == 0) {
-            if (static_cast<int32_t>(millis() - idle_deadline) >= 0) break;
-            vTaskDelay(pdMS_TO_TICKS(2));
-            continue;
         }
         if (!started) {
             // An ESP32 application image always begins with the 0xE9 magic byte.
@@ -782,7 +780,6 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
             break;
         }
         ota_received_.fetch_add(static_cast<size_t>(read));
-        idle_deadline = millis() + OTA_IDLE_TIMEOUT_MS;
     }
 
     esp_http_client_close(client);
@@ -804,21 +801,12 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
 }
 
 esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
-    // Claim the prepared window under ota_mutex_ but stream the body without it:
-    // an upload takes many seconds and the service loop needs the lock meanwhile.
-    const char* refusal = nullptr;
-    {
-        const std::lock_guard<std::recursive_mutex> ota_lock(ota_mutex_);
-        bool expected_inactive = false;
-        if (!is_ota_ready()) {
-            refusal = "Prepare the firmware update before uploading";
-        } else if (!ota_active_.compare_exchange_strong(expected_inactive, true)) {
-            refusal = "Another firmware update is already active";
-        } else {
-            ota_preparation_state_.store(OtaPreparationState::IDLE);
-        }
+    // The claim takes ota_mutex_, but the body streams without it: an upload
+    // takes many seconds and the service loop needs the lock meanwhile.
+    if (!claim_prepared_update()) {
+        return http::send(request, 409, "text/plain",
+                          "Prepare the firmware update before uploading");
     }
-    if (refusal) return http::send(request, 409, "text/plain", refusal);
 
     if (!grind_controller_ || grind_controller_->is_active()) {
         finish_ota(false);

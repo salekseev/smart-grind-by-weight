@@ -19,26 +19,10 @@ inline bool starts_with(const std::string& value, const std::string& prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
 }
 
-inline bool ends_with(const std::string& value, const std::string& suffix) {
-    return value.size() >= suffix.size() &&
-           value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-inline bool contains(const std::string& value, const std::string& needle) {
-    return value.find(needle) != std::string::npos;
-}
-
 /** Offset of the first occurrence, or -1 when absent. */
 template <typename Needle>
 inline int index_of(const std::string& value, const Needle& needle, size_t from = 0) {
     const size_t position = value.find(needle, from);
-    return position == std::string::npos ? -1 : static_cast<int>(position);
-}
-
-/** Offset of the last occurrence, or -1 when absent. */
-template <typename Needle>
-inline int last_index_of(const std::string& value, const Needle& needle) {
-    const size_t position = value.rfind(needle);
     return position == std::string::npos ? -1 : static_cast<int>(position);
 }
 

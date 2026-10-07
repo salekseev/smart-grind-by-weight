@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from settings_persistence_test import method
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -19,13 +20,14 @@ class SettingsCompatibilityTest(unittest.TestCase):
             "    const std::string screensaver_style", 1)[0]
         resolve = source.split("    DeviceSettingsUpdate settings = update;", 1)[1].split(
             "    Preferences* grinder =", 1)[0]
+        form_bool = method(source, "bool form_bool(")
         code = r'''
 #include <map>
 #include <string>
 #include <cstdint>
 #include <cassert>
 #include "system/string_utils.h"
-bool form_bool(const std::string& v){return v=="1" || v=="true" || v=="on";}
+''' + form_bool + r'''
 struct Settings {
  uint16_t screensaver_idle_timeout_s=0;
  uint8_t screensaver_startup_timeout_s=0;
