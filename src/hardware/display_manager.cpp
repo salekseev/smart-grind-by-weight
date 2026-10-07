@@ -15,7 +15,7 @@
 #include "../system/timing.h"
 
 #if HW_DISPLAY_VARIANT_V2
-#include "esp_lcd_sh8601.h"
+#include <esp_lcd_sh8601.h>
 #else
 #include <esp_lcd_co5300.h>
 #endif

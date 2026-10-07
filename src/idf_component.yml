@@ -11,8 +11,9 @@ dependencies:
   # Filesystem behind the grind-session log and screensaver image
   joltwallet/littlefs: "==1.22.3"
 
-  # AMOLED panel controller on the V1 board (V2 uses the vendored SH8601 driver)
+  # AMOLED panel controllers: CO5300 on the V1 board, SH8601 on V2
   espressif/esp_lcd_co5300: "==2.1.0"
+  espressif/esp_lcd_sh8601: "==2.0.1~1"
 
   # BLE OTA, data export and diagnostics services
   h2zero/esp-nimble-cpp: "==2.5.0"

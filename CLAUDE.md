@@ -54,7 +54,8 @@ python3 tools/grinder.py analyze
   silently drops the fonts the UI needs (`CONFIG_LV_CONF_SKIP=n`).
 - `src/CMakeLists.txt` registers the firmware as the main component.
 - `src/idf_component.yml` pins the managed dependencies: LVGL, littlefs,
-  esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300, improv.
+  esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601,
+  improv.
 - `components/` holds the vendored delta OTA pair: delta and detools.
 - `sdkconfig.defaults` carries CPU, PSRAM, partition, BLE, TLS and FreeRTOS
   settings. `CONFIG_FREERTOS_HZ=1000` is required: the control loops run on
@@ -65,9 +66,9 @@ python3 tools/grinder.py analyze
   the `-D` hardware/debug switches stay in `build_flags`.
 
 **Key native replacements** (no Arduino compatibility layer):
-- Display: `esp_lcd` for both revisions - `esp_lcd_co5300` on V1, the vendored
-  `esp_lcd_sh8601.c` on V2. Same QSPI bus, 40 MHz, `esp_lcd_panel_set_gap` for
-  the panel's 20-pixel column offset.
+- Display: `esp_lcd` for both revisions - `esp_lcd_co5300` on V1,
+  `esp_lcd_sh8601` on V2, both from the ESP Component Registry. Same QSPI bus,
+  40 MHz, `esp_lcd_panel_set_gap` for the panel's 20-pixel column offset.
 - BLE: `esp-nimble-cpp` (`NimBLEDevice`/`NimBLEServer`/`NimBLECharacteristic`).
 - HTTP: `esp_http_server` behind `src/network/http_support.h`, which adapts
   capturing lambdas into route handlers and provides request/response helpers.

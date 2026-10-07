@@ -31,6 +31,7 @@ idf_component_register(
         # Managed / local components
         delta
         esp_lcd_co5300
+        esp_lcd_sh8601
         esp_websocket_client
         improv
         littlefs
