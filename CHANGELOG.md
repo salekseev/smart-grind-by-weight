@@ -13,8 +13,8 @@ line. Earlier release history remains available in the original project's
   server, and Wi-Fi, mDNS, storage and OTA on their ESP-IDF equivalents. Stored
   settings, grind history and the custom screensaver carry over unchanged, and
   both the browser and Bluetooth update paths keep working as before. The
-  firmware is roughly 20% smaller and leaves more RAM free for grinding and the
-  interface.
+  firmware image is about 10% smaller (270-300 KB less) and uses 9 KB less
+  static RAM.
 
 ### Wi-Fi
 

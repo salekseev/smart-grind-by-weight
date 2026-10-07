@@ -150,8 +150,9 @@ The ESP-IDF component manager then resolves the managed dependencies listed in
 - `src/CMakeLists.txt` - registers the firmware as the main component
 - `src/idf_component.yml` - managed dependencies (LVGL, littlefs, NimBLE-C++,
   mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601, improv)
-- `sdkconfig.defaults` - CPU, PSRAM, partitions, BLE, TLS and FreeRTOS settings;
-  per-environment overrides go in `custom_sdkconfig` in `platformio.ini`
+- `sdkconfig.defaults` - CPU, PSRAM, partitions, BLE, TLS and FreeRTOS settings
+  for every environment (this platform ignores `custom_sdkconfig` for ESP-IDF
+  builds)
 - `components/` - vendored delta OTA components (delta, detools)
 
 `sdkconfig.<environment>` files are generated and are not checked in. Delete one

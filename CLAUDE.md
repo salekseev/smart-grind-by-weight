@@ -62,8 +62,9 @@ python3 tools/grinder.py analyze
   20/25/50 ms periods and would otherwise quantise to 10 ms steps. Generated
   `sdkconfig.<environment>` files are not checked in; delete one to pick up an
   edited `sdkconfig.defaults`.
-- Per-environment Kconfig overrides go in `custom_sdkconfig` in `platformio.ini`;
-  the `-D` hardware/debug switches stay in `build_flags`.
+- Kconfig changes go in `sdkconfig.defaults` for every environment; the `-D`
+  hardware/debug switches stay in `build_flags`. Do not use `custom_sdkconfig`:
+  this platform only merges it for Arduino builds.
 
 **Key native replacements** (no Arduino compatibility layer):
 - Display: `esp_lcd` for both revisions - `esp_lcd_co5300` on V1,
