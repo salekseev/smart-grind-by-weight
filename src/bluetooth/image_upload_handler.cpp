@@ -150,7 +150,7 @@ bool ImageUploadHandler::complete_upload() {
         committed_file.close();
     }
     if (!committed_ok) {
-        LOG_BLE("Image Upload: FsFile missing after rename\n");
+        LOG_BLE("Image Upload: File missing after rename\n");
         filesystem.remove(BLE_IMAGE_FILENAME);
         if (had_existing_image) {
             filesystem.rename(backup_filename, BLE_IMAGE_FILENAME);

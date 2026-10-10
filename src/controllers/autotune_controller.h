@@ -95,7 +95,7 @@ private:
     AutoTuneResult result;
     AutoTuneProgress progress;
 
-    // FsFile logging
+    // File logging
     FsFile autotune_log_file;
 
 public:

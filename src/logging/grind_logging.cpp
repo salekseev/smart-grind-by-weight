@@ -1029,7 +1029,7 @@ bool GrindLogger::remove_session_file(uint32_t session_id) {
         }
         return result;
     }
-    return true; // FsFile doesn't exist, so "removal" succeeded
+    return true; // File doesn't exist, so "removal" succeeded
 }
 
 void GrindLogger::cleanup_old_session_files() {

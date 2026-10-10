@@ -43,7 +43,7 @@ struct FileIORequest {
  * - Handle log message output to serial/BLE
  * - Manage preference/settings persistence
  * - Coordinate data export operations
- * - FsFile system maintenance and cleanup
+ * - File system maintenance and cleanup
  * 
  * Architecture:
  * - Runs on Core 1 at low priority (1)
@@ -94,7 +94,7 @@ public:
     void stop_task();
     bool is_running() const { return task_running; }
     
-    // FsFile system status
+    // File system status
     bool is_filesystem_available() const { return filesystem_available; }
     uint32_t get_total_operations() const { return total_operations_processed; }
     uint32_t get_failed_operations() const { return failed_operations_count; }
@@ -119,7 +119,7 @@ private:
     void process_preference_write(const char* key, const char* value);
     void process_data_export(const char* export_path, uint32_t start_id, uint32_t end_id);
     
-    // FsFile system management
+    // File system management
     void check_filesystem_health();
     bool validate_filesystem_access();
     void perform_filesystem_maintenance();

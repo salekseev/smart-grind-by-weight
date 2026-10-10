@@ -187,9 +187,9 @@ bool WeightSamplingTask::initialize_hx711_hardware() {
     
     // Hardware reset sequence (extracted from RealtimeController)
     weight_sensor->power_down();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Use vTaskDelay instead of vTaskDelay(pdMS_TO_TICKS())
+    vTaskDelay(pdMS_TO_TICKS(1000));
     weight_sensor->power_up();
-    vTaskDelay(pdMS_TO_TICKS(500));  // Use vTaskDelay instead of vTaskDelay(pdMS_TO_TICKS())
+    vTaskDelay(pdMS_TO_TICKS(500));
     
     bool begin_success = weight_sensor->begin();
     if (!begin_success) {
@@ -211,7 +211,7 @@ bool WeightSamplingTask::initialize_hx711_hardware() {
         if (weight_sensor->data_waiting_async()) {
             weight_sensor->update_async();
         }
-        vTaskDelay(pdMS_TO_TICKS(10)); // Use vTaskDelay instead of vTaskDelay(pdMS_TO_TICKS())
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     
     // Validate hardware responds

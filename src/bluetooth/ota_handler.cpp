@@ -274,15 +274,6 @@ bool OTAHandler::complete_ota() {
         LOG_OTA_DEBUG("Calling esp_restart()...\n");
         fflush(stdout);
         esp_restart();
-        
-        // Fallback restart methods
-        LOG_OTA_DEBUG("esp_restart() failed, trying esp_restart()...\n");
-        fflush(stdout);
-        esp_restart();
-        
-        LOG_OTA_DEBUG("esp_restart() failed, entering infinite loop...\n");
-        fflush(stdout);
-        while(true) vTaskDelay(pdMS_TO_TICKS(1000));
     } else {
         current_status = BLE_OTA_ERROR;
         LOG_BLE("OTA: Finalization failed\n");
