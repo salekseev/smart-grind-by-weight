@@ -54,9 +54,9 @@ the grinder's smaller feature set.
   configured Bluetooth state without leaking heap by rebuilding the retained
   BLE server singleton in the same boot.
 - Do not pre-erase the complete OTA partition or suspend a task while it can hold
-  a flash lock. Both patterns can stall an upload or deadlock recovery; use the
-  platform Update API's sector-at-a-time path and keep the network/main loop
-  schedulable.
+  a flash lock. Both patterns can stall an upload or deadlock recovery; erase
+  sector by sector as the image arrives (`OTA_WITH_SEQUENTIAL_WRITES`) and keep
+  the network/main loop schedulable.
 - Hardware tasks are removed from task-watchdog monitoring before OTA suspends
   them and registered again before they resume. A deliberately suspended task
   must never cause a watchdog reboot midway through an otherwise healthy upload.

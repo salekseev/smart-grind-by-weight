@@ -22,8 +22,10 @@ bool OtaWriter::begin(size_t expected_size) {
 
     written_ = 0;
     error_ = "";
-    const size_t size = expected_size > 0 ? expected_size : OTA_SIZE_UNKNOWN;
-    const esp_err_t err = esp_ota_begin(partition_, size, &handle_);
+    // Erase each sector as the image reaches it. Erasing the image's extent up
+    // front blocks the caller for seconds, and for a browser upload that is the
+    // HTTP server's only task.
+    const esp_err_t err = esp_ota_begin(partition_, OTA_WITH_SEQUENTIAL_WRITES, &handle_);
     if (err != ESP_OK) {
         handle_ = 0;
         return fail(esp_err_to_name(err));

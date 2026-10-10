@@ -18,8 +18,9 @@ public:
     /**
      * Open the inactive partition for writing.
      *
-     * @param expected_size Image size when known, or 0 to size it from the
-     *        partition. Sizes larger than the partition are rejected.
+     * @param expected_size Image size when known, or 0 when it is not. Sizes
+     *        larger than the partition are rejected. The partition is erased
+     *        sector by sector as the image is written.
      */
     bool begin(size_t expected_size);
 
