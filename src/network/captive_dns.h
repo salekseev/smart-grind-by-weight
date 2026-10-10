@@ -10,7 +10,8 @@
 //==============================================================================
 // While the setup access point is up, every name lookup has to resolve to the
 // grinder so a phone's captive-portal detector opens the Wi-Fi setup page. This
-// answers any A query with the access point's own address.
+// answers A and ANY queries with the access point's own address, and other
+// types with an empty answer.
 //
 // It replaces the Arduino DNSServer with a small lwIP socket listener on its own
 // task, so it never runs on the grind, load-cell or UI tasks.
