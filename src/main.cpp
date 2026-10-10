@@ -3,6 +3,7 @@
 #include <esp_event.h>
 #include <cstdint>
 #include <esp_netif.h>
+#include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -112,8 +113,25 @@ void init_console() {
  * Bring up the settings partition and the shared event loop that the
  * Wi-Fi, BLE and HTTP services all attach to.
  */
+/**
+ * Confirm the running image so the bootloader keeps it. After an update the
+ * bootloader rolls back to the previous image at the next reset unless the new
+ * one confirms itself; the Arduino core did this at startup, and grinders
+ * updated from that firmware keep its rollback-enabled bootloader.
+ */
+void confirm_running_image() {
+    esp_ota_img_states_t state;
+    if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) != ESP_OK ||
+        state != ESP_OTA_IMG_PENDING_VERIFY) {
+        return;
+    }
+    const esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
+    LOG_BLE("[STARTUP] Confirmed updated firmware: %s\n", esp_err_to_name(err));
+}
+
 void init_platform_services() {
     init_console();
+    confirm_running_image();
 
     esp_err_t nvs_status = nvs_flash_init();
     if (nvs_status == ESP_ERR_NVS_NO_FREE_PAGES ||

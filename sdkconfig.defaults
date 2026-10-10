@@ -26,6 +26,13 @@ CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 #
+# An updated image must confirm itself on its first boot or the bootloader
+# returns to the previous one, as under the Arduino core. Grinders updated from
+# that firmware keep its bootloader, which enforces this regardless.
+#
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+#
 # Octal PSRAM at 80 MHz (the qio_opi memory type of the Waveshare module).
 # LVGL's draw buffer pool and the grind-session buffers live here.
 #
