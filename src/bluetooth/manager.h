@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 
 #include "../storage/preferences.h"
@@ -136,6 +137,12 @@ private:
     // Diagnostics report control flags
     bool diagnostic_report_pending;
     bool diagnostic_report_in_progress;
+
+    // disable() frees every service and characteristic. The UI and service
+    // loop call enable()/disable() while the Bluetooth task runs handle(), so
+    // all three hold this lock. NimBLE callbacks must not take it: deinit waits
+    // for the NimBLE host task while holding it.
+    std::recursive_mutex lifecycle_mutex;
 
     // Private methods
     void update_ui_status(const char* status);

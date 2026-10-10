@@ -119,6 +119,7 @@ bool BluetoothManager::dequeue_ui_status(char* out, size_t out_len) {
 }
 
 void BluetoothManager::enable(unsigned long timeout_ms) {
+    const std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex);
     if (ble_enabled) return;
     
     // Use default timeout if none specified
@@ -145,7 +146,9 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     
     ble_server = NimBLEDevice::createServer();
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_SERVER_DELAY_MS));
-    ble_server->setCallbacks(this);
+    // NimBLE deletes server callbacks it owns when disable() frees the server;
+    // this manager is a static object, so it must keep ownership.
+    ble_server->setCallbacks(this, false);
     
     // Create OTA service
     ota_service = ble_server->createService(BLE_OTA_SERVICE_UUID);
@@ -289,6 +292,7 @@ void BluetoothManager::enable_during_bootup() {
 }
 
 void BluetoothManager::disable() {
+    const std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex);
     if (!ble_enabled) return;
     
     log("Bluetooth: Disabling BLE and restoring normal power...\n");
@@ -306,9 +310,11 @@ void BluetoothManager::disable() {
     }
 
     // Set flags before deinit so that callbacks fired during teardown
-    // (e.g. onDisconnect → start_advertising) see BLE as already disabled.
+    // (e.g. onDisconnect → start_advertising) see BLE as already disabled, and
+    // log() from other tasks stops writing to the debug characteristic.
     ble_enabled = false;
     device_connected = false;
+    debug_stream_active = false;
 
     stop_advertising();
     vTaskDelay(pdMS_TO_TICKS(BLE_SHUTDOWN_ADVERTISING_DELAY_MS));
@@ -337,7 +343,6 @@ void BluetoothManager::disable() {
     sysinfo_hardware_characteristic = nullptr;
     sysinfo_sessions_characteristic = nullptr;
     sysinfo_diagnostics_characteristic = nullptr;
-    debug_stream_active = false;
     
     // Restore normal power settings
     ota_handler.restore_normal_power_mode();
@@ -345,6 +350,7 @@ void BluetoothManager::disable() {
 }
 
 void BluetoothManager::handle() {
+    const std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex);
     if (!ble_enabled) return;
     
     // Only check timeout when no client is connected
