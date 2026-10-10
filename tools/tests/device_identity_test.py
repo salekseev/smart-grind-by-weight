@@ -1,4 +1,4 @@
-"""Keep the device identity and heap figures the Arduino firmware reported."""
+"""Keep the device identity, heap figures and internal RAM the Arduino firmware had."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -77,6 +77,13 @@ int main() {
         # Bluetooth address at base + 1; four would move it to base + 2.
         settings = (ROOT / "sdkconfig.defaults").read_text().splitlines()
         self.assertIn("CONFIG_ESP32S3_UNIVERSAL_MAC_ADDRESSES_TWO=y", settings)
+
+    def test_wifi_code_leaves_internal_ram_to_the_heap(self):
+        # The Arduino core kept the Wi-Fi hot paths in flash. Moving them to
+        # IRAM costs the internal heap that browser updates are admitted on.
+        settings = (ROOT / "sdkconfig.defaults").read_text().splitlines()
+        self.assertIn("CONFIG_ESP_WIFI_IRAM_OPT=n", settings)
+        self.assertIn("CONFIG_ESP_WIFI_RX_IRAM_OPT=n", settings)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,10 @@ the grinder's smaller feature set.
   allowed to accumulate unbounded send queues and exhaust internal RAM.
 - Keep LVGL's object heap in PSRAM on hardware so the Wi-Fi/lwIP stack retains
   enough internal RAM to accept TCP connections under a fully constructed UI.
+- Keep the Wi-Fi library code in flash (`CONFIG_ESP_WIFI_IRAM_OPT` and
+  `CONFIG_ESP_WIFI_RX_IRAM_OPT` off), as the Arduino core did. On the ESP32-S3,
+  IRAM comes out of the same internal SRAM as the heap that OTA admission
+  measures.
 - Captive portal probes used by Android, Apple, Windows and Firefox need explicit
   responses so setup opens reliably on common phones and laptops.
 - OTA must be a controlled appliance state: require an explicit browser

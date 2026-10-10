@@ -57,11 +57,11 @@ python3 tools/grinder.py analyze
   esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601,
   improv.
 - `components/` holds the vendored delta OTA pair: delta and detools.
-- `sdkconfig.defaults` carries CPU, PSRAM, partition, BLE, TLS and FreeRTOS
-  settings. `CONFIG_FREERTOS_HZ=1000` is required: the control loops run on
-  20/25/50 ms periods and would otherwise quantise to 10 ms steps. Generated
-  `sdkconfig.<environment>` files are not checked in; delete one to pick up an
-  edited `sdkconfig.defaults`.
+- `sdkconfig.defaults` carries CPU, PSRAM, partition, MAC address, Wi-Fi, BLE,
+  TLS and FreeRTOS settings. `CONFIG_FREERTOS_HZ=1000` is required: the control
+  loops run on 20/25/50 ms periods and would otherwise quantise to 10 ms steps.
+  Generated `sdkconfig.<environment>` files are not checked in; delete one to
+  pick up an edited `sdkconfig.defaults`.
 - Kconfig changes go in `sdkconfig.defaults` for every environment; the `-D`
   hardware/debug switches stay in `build_flags`. Do not use `custom_sdkconfig`:
   this platform only merges it for Arduino builds.
