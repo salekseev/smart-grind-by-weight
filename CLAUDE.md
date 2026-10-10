@@ -3,7 +3,7 @@
 ESP32-S3 intelligent coffee scale with grind-by-weight functionality. Features predictive grinding system, LVGL touch UI, and BLE OTA updates. Automatically grinds coffee beans to precise target weights using flow prediction and pulse correction algorithms.
 
 The firmware is a native **ESP-IDF** application (`framework = espidf`, ESP-IDF
-v5.5.1 via the pioarduino platform pin). There is no Arduino core: the entry
+v5.5.5 via the pioarduino platform pin). There is no Arduino core: the entry
 point is `app_main()` in `src/main.cpp`, and every peripheral, storage and
 network API is an ESP-IDF one.
 

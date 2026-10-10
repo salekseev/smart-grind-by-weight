@@ -51,7 +51,7 @@ jobs:
     
       - name: Install PlatformIO
         run: |
-          pip install platformio==6.1.19
+          pip install platformio==6.2.0
     
       - name: Build firmware
         run: |

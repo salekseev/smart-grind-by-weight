@@ -65,7 +65,7 @@ jobs:
             ${{ runner.os }}-pio-objects-
 
       - name: Install PlatformIO
-        run: pip install platformio==6.1.19
+        run: pip install platformio==6.2.0
 
       - name: Run firmware host regression tests
         run: python -m unittest discover -s tools/tests -p '*_test.py'

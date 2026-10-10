@@ -136,8 +136,8 @@ The firmware is a native **ESP-IDF** application built through PlatformIO. The
 it tracks newer ESP-IDF releases than the stock PlatformIO platform.
 
 **Platform Details:**
-- **Platform**: [pioarduino/platform-espressif32](https://github.com/pioarduino/platform-espressif32), pinned to 55.03.32
-- **Framework**: ESP-IDF v5.5.1 (`framework = espidf`)
+- **Platform**: [pioarduino/platform-espressif32](https://github.com/pioarduino/platform-espressif32), pinned to 55.03.312-1
+- **Framework**: ESP-IDF v5.5.5 (`framework = espidf`)
 - **Target**: ESP32-S3 with AMOLED touch display
 
 PlatformIO installs the platform and toolchain from the URL in `platformio.ini`.
