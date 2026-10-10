@@ -8,8 +8,10 @@ body is complete, waiting up to the client's timeout_ms for every TLS read. A
 wait that times out returns the bytes gathered so far, or -ESP_ERR_HTTP_EAGAIN
 when there are none. A peer close (FIN) returns the bytes gathered so far, or
 ESP_FAIL when there are none and the body is incomplete. The call returns 0
-only once the whole body has arrived. Time passes only while a read is blocked
-so every elapsed-time assertion is exact.
+only once the whole body has arrived. A scripted number of redirect responses
+can precede the image; as in esp_http_client.c, the caller drains each one and
+calls esp_http_client_set_redirection before opening again. Time passes only
+while a read is blocked so every elapsed-time assertion is exact.
 """
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,9 +23,10 @@ from controller_serialization_test import function
 
 ROOT = Path(__file__).resolve().parents[2]
 PARTITION_SIZE = 0x200000
+SOURCE = (ROOT / "src/network/device_web_server.cpp").read_text()
 # The per-read wait that the production download configures on its client.
-READ_TIMEOUT_MS = int(re.search(r"OTA_READ_TIMEOUT_MS = (\d+);",
-                                (ROOT / "src/network/device_web_server.cpp").read_text()).group(1))
+READ_TIMEOUT_MS = int(re.search(r"OTA_READ_TIMEOUT_MS = (\d+);", SOURCE).group(1))
+MAX_REDIRECTS = int(re.search(r"HTTP_MAX_REDIRECTS = (\d+);", SOURCE).group(1))
 
 HARNESS = r'''
 #include "config/constants.h"  // production LOG_BLE and HW_RELEASE_FIRMWARE_SUFFIX
@@ -156,6 +159,10 @@ struct ServerEvent {
 struct esp_http_client {
     int status = 200;
     int64_t content_length = 0;
+    int redirects_left = 0;  // redirect responses still to come before the image
+    bool redirect_drained = false;
+    int opens = 0;
+    int redirections = 0;
     std::vector<ServerEvent> events;
     size_t event_index = 0;
     size_t event_offset = 0;
@@ -192,12 +199,34 @@ esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t* co
 esp_err_t esp_http_client_set_header(esp_http_client_handle_t, const char*, const char*) {
     return ESP_OK;
 }
-esp_err_t esp_http_client_open(esp_http_client_handle_t, int) { return ESP_OK; }
+esp_err_t esp_http_client_open(esp_http_client_handle_t, int) {
+    check(!http.headers_fetched, "opened again without following the redirect");
+    ++http.opens;
+    return ESP_OK;
+}
 int64_t esp_http_client_fetch_headers(esp_http_client_handle_t) {
     http.headers_fetched = true;
+    if (http.redirects_left > 0) return 0;  // a redirect with an empty body
     return http.content_length > 0 ? http.content_length : 0;  // 0 means chunked/unknown
 }
-int esp_http_client_get_status_code(esp_http_client_handle_t) { return http.status; }
+int esp_http_client_get_status_code(esp_http_client_handle_t) {
+    return http.redirects_left > 0 ? 302 : http.status;
+}
+esp_err_t esp_http_client_flush_response(esp_http_client_handle_t, int* len) {
+    check(http.headers_fetched && http.redirects_left > 0, "flushed a response that was not a redirect");
+    http.redirect_drained = true;
+    if (len) *len = 0;
+    return ESP_OK;
+}
+// Points the client at the Location header; the next open sends the new request.
+esp_err_t esp_http_client_set_redirection(esp_http_client_handle_t) {
+    check(http.redirect_drained, "redirected before draining the redirect response");
+    --http.redirects_left;
+    ++http.redirections;
+    http.redirect_drained = false;
+    http.headers_fetched = false;
+    return ESP_OK;
+}
 esp_err_t esp_http_client_close(esp_http_client_handle_t) {
     ++http.closes;
     http.closed = true;
@@ -235,7 +264,7 @@ int transport_read(uint8_t* out, int wanted, int timeout_ms) {
 
 // esp_http_client_read for a Content-Length body (esp_http_client.c).
 int esp_http_client_read(esp_http_client_handle_t client, char* buffer, int len) {
-    check(client == &http && http.headers_fetched && !http.closed,
+    check(client == &http && http.headers_fetched && !http.closed && http.redirects_left == 0,
           "body read outside an open response");
     check(++http.reads < 100000, "download kept reading without progress");
     int ridx = 0;
@@ -276,6 +305,8 @@ void DeviceWebServer::finish_ota(bool success) {
 
 @PRODUCTION_CONSTANTS@
 
+@PRODUCTION_OPEN_RESPONSE@
+
 @PRODUCTION_DOWNLOAD@
 
 std::vector<uint8_t> from_hex(const std::string& hex) {
@@ -304,6 +335,8 @@ int main() {
             fields >> http.status;
         } else if (key == "length") {
             fields >> http.content_length;
+        } else if (key == "redirects") {
+            fields >> http.redirects_left;
         } else if (key == "invalid_image") {
             web_firmware_update.image_validates = false;
         } else if (key == "flash_write_fails") {
@@ -342,6 +375,8 @@ int main() {
               << "elapsed_ms=" << elapsed_ms() << "\n"
               << "grinder_stops=" << hardware.grinder.stops << "\n"
               << "http_reads=" << http.reads << "\n"
+              << "http_opens=" << http.opens << "\n"
+              << "http_redirections=" << http.redirections << "\n"
               << "http_closes=" << http.closes << "\n"
               << "http_cleanups=" << http.cleanups << "\n"
               << "first_body_byte_ms=" << http.first_body_byte_ms << "\n"
@@ -384,10 +419,11 @@ def close(at_ms):
 class OtaStreamTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        source = (ROOT / "src/network/device_web_server.cpp").read_text()
-        download = function(source, "void DeviceWebServer::perform_github_ota(const std::string& tag)")
-        constants = "\n".join(constants_used_by(source, download))
+        opener = function(SOURCE, "bool open_response(")
+        download = function(SOURCE, "void DeviceWebServer::perform_github_ota(const std::string& tag)")
+        constants = "\n".join(constants_used_by(SOURCE, opener + download))
         harness = HARNESS.replace("@PRODUCTION_CONSTANTS@", constants)
+        harness = harness.replace("@PRODUCTION_OPEN_RESPONSE@", opener)
         harness = harness.replace("@PRODUCTION_DOWNLOAD@", download)
         cls._tmp = tempfile.TemporaryDirectory()
         cpp, cls._binary = Path(cls._tmp.name) / "download.cpp", Path(cls._tmp.name) / "download"
@@ -405,11 +441,11 @@ class OtaStreamTest(unittest.TestCase):
         cls._tmp.cleanup()
 
     def download(self, *events, status=200, length=None, image_validates=True,
-                 flash_write_fails=False):
+                 flash_write_fails=False, redirects=0):
         """Run perform_github_ota against a server sending `events` after the headers."""
         if length is None:
             length = sum(len(bytes.fromhex(e.split()[2])) for e in events if e.startswith("data"))
-        script = [f"status {status}", f"length {length}", *events]
+        script = [f"status {status}", f"length {length}", f"redirects {redirects}", *events]
         if not image_validates:
             script.append("invalid_image")
         if flash_write_fails:
@@ -531,6 +567,18 @@ class OtaStreamTest(unittest.TestCase):
         self.assertEqual(result.begin_ms, 40 + READ_TIMEOUT_MS)
         self.assertGreater(len(result.write_sizes), 2)
         self.assertEqual(result.elapsed_ms, at_ms - 5)
+
+    def test_redirected_release_is_followed_to_the_image(self):
+        payload = image(5000)
+        result = self.download(data(40, payload), redirects=MAX_REDIRECTS)
+        self.assert_installed(result, payload)
+        self.assertEqual((result.http_opens, result.http_redirections),
+                         (MAX_REDIRECTS + 1, MAX_REDIRECTS))
+
+    def test_redirect_loop_is_abandoned_before_reading_body(self):
+        result = self.download(data(0, image(5000)), redirects=MAX_REDIRECTS + 1)
+        self.assert_rejected_unopened(result)
+        self.assertEqual((result.http_opens, result.http_reads), (MAX_REDIRECTS + 1, 0))
 
     def test_bad_status_or_size_is_rejected_before_reading_body(self):
         payload = image(5000)

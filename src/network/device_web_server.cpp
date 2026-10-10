@@ -70,6 +70,8 @@ constexpr size_t UPDATE_CHECK_TASK_STACK = 10U * 1024U;
 constexpr size_t OTA_DOWNLOAD_BUFFER = 4096;
 // esp_http_client_read waits this long for body data before failing.
 constexpr int OTA_READ_TIMEOUT_MS = 15000;
+// Release requests follow at most this many redirects.
+constexpr int HTTP_MAX_REDIRECTS = 3;
 // GitHub Pages mirrors every published release beneath this versioned path.
 // Using the mirror avoids the github.com -> release-assets.githubusercontent.com
 // redirect during a memory-constrained TLS session while retaining the exact
@@ -151,6 +153,31 @@ bool json_bool_value(const std::string& json, const char* key, bool& value) {
     return false;
 }
 
+/**
+ * Send the request and read the response headers, following redirects as
+ * esp_https_ota does: unlike esp_http_client_perform, the open/read API hands a
+ * redirect back to the caller.
+ *
+ * @return false when the request could not be sent or redirected; otherwise
+ *         `status` and `content_length` describe the final response.
+ */
+bool open_response(esp_http_client_handle_t client, int& status, int64_t& content_length) {
+    for (int redirects = 0;; ++redirects) {
+        if (esp_http_client_open(client, 0) != ESP_OK) return false;
+        content_length = esp_http_client_fetch_headers(client);
+        status = esp_http_client_get_status_code(client);
+        const bool redirect = status == 301 || status == 302 || status == 303 ||
+                              status == 307 || status == 308;
+        if (!redirect || redirects == HTTP_MAX_REDIRECTS) return true;
+        // Discard the redirect body so the connection can carry the next
+        // request; a redirect to another host reconnects instead.
+        if (esp_http_client_flush_response(client, nullptr) != ESP_OK ||
+            esp_http_client_set_redirection(client) != ESP_OK) {
+            return false;
+        }
+    }
+}
+
 /** Fetch a URL over TLS into `body`, refusing responses above `max_bytes`. */
 bool fetch_text(const char* url, const char* user_agent, int timeout_ms, size_t max_bytes,
                 std::string& body) {
@@ -159,26 +186,23 @@ bool fetch_text(const char* url, const char* user_agent, int timeout_ms, size_t 
     config.timeout_ms = timeout_ms;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.user_agent = user_agent;
-    config.disable_auto_redirect = false;
-    config.max_redirection_count = 3;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) return false;
 
     bool success = false;
     esp_http_client_set_header(client, "Cache-Control", "no-cache");
-    if (esp_http_client_open(client, 0) == ESP_OK) {
-        const int64_t length = esp_http_client_fetch_headers(client);
-        const int status = esp_http_client_get_status_code(client);
-        if (status == 200 && length > 0 && static_cast<size_t>(length) <= max_bytes) {
-            body.assign(static_cast<size_t>(length), '\0');
-            const int read = esp_http_client_read_response(client, body.data(), length);
-            if (read == length) {
-                success = true;
-            }
+    int status = 0;
+    int64_t length = 0;
+    if (open_response(client, status, length) && status == 200 && length > 0 &&
+        static_cast<size_t>(length) <= max_bytes) {
+        body.assign(static_cast<size_t>(length), '\0');
+        const int read = esp_http_client_read_response(client, body.data(), length);
+        if (read == length) {
+            success = true;
         }
-        esp_http_client_close(client);
     }
+    esp_http_client_close(client);
     esp_http_client_cleanup(client);
     return success;
 }
@@ -703,8 +727,6 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
     config.timeout_ms = OTA_READ_TIMEOUT_MS;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.user_agent = "SmartGrind-OTA/1";
-    config.disable_auto_redirect = false;
-    config.max_redirection_count = 3;
     config.buffer_size = 1024;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -715,15 +737,15 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
     }
 
     esp_http_client_set_header(client, "Cache-Control", "no-cache");
-    if (esp_http_client_open(client, 0) != ESP_OK) {
+    int status = 0;
+    int64_t content_length = 0;
+    if (!open_response(client, status, content_length)) {
         LOG_BLE("[WEB OTA] Could not open release-mirror connection\n");
+        esp_http_client_close(client);
         esp_http_client_cleanup(client);
         finish_ota(false);
         return;
     }
-
-    const int64_t content_length = esp_http_client_fetch_headers(client);
-    const int status = esp_http_client_get_status_code(client);
     if (status != 200) {
         LOG_BLE("[WEB OTA] Release download failed: HTTP %d, epoch %lld, heap %u, largest %u\n",
                 status, static_cast<long long>(time(nullptr)),
