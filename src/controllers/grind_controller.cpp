@@ -908,8 +908,8 @@ void GrindController::switch_phase(GrindPhase new_phase, const GrindLoopData& lo
         if (last_error_message[0] == '\0') {
             set_error_message("Error");
         }
-        std::strncpy(event_data.error_message, last_error_message,
-                     sizeof(event_data.error_message) - 1);
+        std::snprintf(event_data.error_message, sizeof(event_data.error_message), "%s",
+                      last_error_message);
         // Use non-blocking high latency weight instead of precision settled weight
         event_data.error_weight = weight_sensor ? weight_sensor->get_weight_high_latency() : 0.0f;
         final_weight = event_data.error_weight;
