@@ -164,15 +164,23 @@ void GaggiMateStatusClient::task_loop() {
         if (enabled && network_manager.is_connected() && is_valid_host(host)) {
             // One critical section per tick: this loop runs at 50 Hz purely to
             // notice that the 5 s HTTP fallback is not yet due.
+            bool requested = false;
             bool reconnect = false;
             uint32_t last_success_ms = 0;
             if (mutex_) xSemaphoreTake(mutex_, portMAX_DELAY);
-            reconnect = reconnect_requested_ || websocket_ == nullptr || connected_host_ != host;
+            requested = reconnect_requested_;
+            reconnect = requested || websocket_ == nullptr || connected_host_ != host;
             reconnect_requested_ = false;
             last_success_ms = last_success_ms_;
             if (mutex_) xSemaphoreGive(mutex_);
-            if (reconnect) start_websocket(host);
             const uint32_t now_ms = millis();
+            // A client that could not start, typically for lack of internal RAM,
+            // is retried at its reconnect interval rather than on every tick.
+            if (reconnect &&
+                (requested || now_ms - last_websocket_start_ms_ >= WEBSOCKET_RETRY_MS)) {
+                last_websocket_start_ms_ = now_ms;
+                start_websocket(host);
+            }
             if (last_success_ms == 0 || now_ms - last_success_ms >= HTTP_FALLBACK_INTERVAL_MS) {
                 if (last_http_poll_ms_ == 0 || now_ms - last_http_poll_ms_ >= HTTP_FALLBACK_INTERVAL_MS) {
                     last_http_poll_ms_ = now_ms;
@@ -193,7 +201,7 @@ void GaggiMateStatusClient::start_websocket(const std::string& host) {
     const std::string uri = "ws://" + host + ":80/ws";
     esp_websocket_client_config_t config = {};
     config.uri = uri.c_str();
-    config.reconnect_timeout_ms = 3000;
+    config.reconnect_timeout_ms = WEBSOCKET_RETRY_MS;
     config.network_timeout_ms = 3000;
     // GaggiMate pushes a status frame every second; a 15 s ping keeps NAT and
     // the socket alive when the machine is idle.

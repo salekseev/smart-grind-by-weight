@@ -32,6 +32,8 @@ public:
 private:
     static constexpr uint32_t OFFLINE_GRACE_MS = 5000;
     static constexpr uint32_t HTTP_FALLBACK_INTERVAL_MS = 5000;
+    // Both the client's own reconnect interval and the retry after a failed start.
+    static constexpr uint32_t WEBSOCKET_RETRY_MS = 3000;
 
     mutable SemaphoreHandle_t mutex_ = nullptr;
     TaskHandle_t task_handle_ = nullptr;
@@ -43,6 +45,7 @@ private:
     GaggiMateStatus status_{};
     uint32_t last_success_ms_ = 0;
     uint32_t last_http_poll_ms_ = 0;
+    uint32_t last_websocket_start_ms_ = 0;
 
     bool ensure_task();
     static void task_entry(void* context);
