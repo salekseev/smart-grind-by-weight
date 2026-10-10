@@ -309,13 +309,16 @@ bool DisplayManager::draw_rgb565_file(const char* path, uint16_t width, uint16_t
     return success;
 }
 
-// Update the refresh area to be full width
-// This avoids weird artifacts when partial row updates are used
+// Redraw full-width rows, starting on an even row and ending on an odd one:
+// partial-width updates leave artifacts, and the SH8601 (V2) only accepts
+// drawing windows on 2-pixel boundaries.
 void DisplayManager::display_rounder_cb(lv_event_t* e) {
     lv_area_t* area = (lv_area_t*)lv_event_get_param(e);
 
     area->x1 = 0;
     area->x2 = g_display_manager->screen_width - 1;
+    area->y1 &= ~1;
+    area->y2 = std::min<int32_t>(area->y2 | 1, g_display_manager->screen_height - 1);
 }
 
 void DisplayManager::display_metrics_cb(lv_event_t* e) {
