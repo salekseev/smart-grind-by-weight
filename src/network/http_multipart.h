@@ -20,7 +20,10 @@
 
 class MultipartReader {
 public:
-    /** Receives file payload bytes in order; return false to abort the upload. */
+    /**
+     * Receives the payload of the first part that carries a file name, in
+     * order; other form fields are skipped. Return false to abort the upload.
+     */
     using DataCallback = std::function<bool(const uint8_t* data, size_t length)>;
 
     /**
@@ -61,11 +64,15 @@ private:
     /** Longest suffix that could still turn into a boundary in the next chunk. */
     size_t retain_length() const;
 
+    /** Hand the first `length` pending bytes to on_data if this part is the file. */
+    bool forward(size_t length, const DataCallback& on_data);
+
     State state_ = State::UNINITIALISED;
     std::string boundary_;   // "--<boundary>"
     std::string delimiter_;  // CRLF + boundary_, as it appears after a part
     std::string pending_;    // bytes not yet classified
     std::string filename_;
+    bool forwarding_ = false;  // the current part's payload goes to on_data
     bool saw_file_ = false;
     size_t bytes_forwarded_ = 0;
 };

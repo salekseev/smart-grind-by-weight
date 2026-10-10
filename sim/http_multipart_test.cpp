@@ -120,6 +120,46 @@ void test_aborting_sink_stops_the_stream() {
     assert(!reader.complete());
 }
 
+void test_only_the_file_part_is_forwarded() {
+    // A form may carry text fields, and even a second file, around the upload.
+    const std::string payload = "\xE9image";
+    std::string body;
+    body += std::string("--") + kBoundary + "\r\n";
+    body += "Content-Disposition: form-data; name=\"label\"\r\n\r\n";
+    body += "kitchen grinder";
+    body += std::string("\r\n--") + kBoundary + "\r\n";
+    body += "Content-Disposition: form-data; name=\"firmware\"; filename=\"fw.bin\"\r\n";
+    body += "Content-Type: application/octet-stream\r\n\r\n";
+    body += payload;
+    body += std::string("\r\n--") + kBoundary + "\r\n";
+    body += "Content-Disposition: form-data; name=\"notes\"; filename=\"notes.txt\"\r\n\r\n";
+    body += "not firmware";
+    body += std::string("\r\n--") + kBoundary + "--\r\n";
+
+    for (size_t chunk : {1u, 5u, 4096u}) {
+        MultipartReader reader;
+        assert(reader.begin(content_type()));
+        assert(run(body, chunk, reader) == payload);
+        assert(reader.complete());
+        assert(reader.filename() == "fw.bin");
+        assert(reader.bytes_forwarded() == payload.size());
+    }
+}
+
+void test_form_without_a_file_forwards_nothing() {
+    // A file input left empty still sends its part, with an empty file name.
+    std::string body = std::string("--") + kBoundary + "\r\n";
+    body += "Content-Disposition: form-data; name=\"firmware\"; filename=\"\"\r\n";
+    body += "Content-Type: application/octet-stream\r\n\r\n";
+    body += std::string("\r\n--") + kBoundary + "--\r\n";
+
+    MultipartReader reader;
+    assert(reader.begin(content_type()));
+    assert(run(body, 7, reader).empty());
+    assert(reader.complete());
+    assert(!reader.saw_file());
+}
+
 }  // namespace
 
 int main() {
@@ -129,6 +169,8 @@ int main() {
     test_quoted_and_parameterised_boundary();
     test_rejects_non_multipart();
     test_aborting_sink_stops_the_stream();
+    test_only_the_file_part_is_forwarded();
+    test_form_without_a_file_forwards_nothing();
     std::printf("http_multipart: all tests passed\n");
     return 0;
 }

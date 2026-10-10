@@ -60,8 +60,17 @@ bool MultipartReader::begin(const std::string& content_type) {
     state_ = State::SEEK_FIRST_BOUNDARY;
     pending_.clear();
     filename_.clear();
+    forwarding_ = false;
     saw_file_ = false;
     bytes_forwarded_ = 0;
+    return true;
+}
+
+bool MultipartReader::forward(size_t length, const DataCallback& on_data) {
+    if (!forwarding_) return true;
+    if (!on_data(reinterpret_cast<const uint8_t*>(pending_.data()), length)) return false;
+    saw_file_ = true;
+    bytes_forwarded_ += length;
     return true;
 }
 
@@ -106,7 +115,10 @@ bool MultipartReader::feed(const uint8_t* data, size_t length, const DataCallbac
 
             const std::string headers = pending_.substr(0, header_end);
             const std::string name = quoted_attribute(headers, "filename");
-            if (!name.empty()) filename_ = name;
+            // Only the first file is the upload; text fields and any later
+            // file are read past without reaching on_data.
+            forwarding_ = !name.empty() && filename_.empty();
+            if (forwarding_) filename_ = name;
             pending_.erase(0, header_end + 4);
             state_ = State::PART_DATA;
             continue;
@@ -118,23 +130,13 @@ bool MultipartReader::feed(const uint8_t* data, size_t length, const DataCallbac
             // Forward everything that cannot be the start of the delimiter.
             if (pending_.size() > retain_length()) {
                 const size_t emit = pending_.size() - retain_length();
-                if (!on_data(reinterpret_cast<const uint8_t*>(pending_.data()), emit)) {
-                    return false;
-                }
-                saw_file_ = true;
-                bytes_forwarded_ += emit;
+                if (!forward(emit, on_data)) return false;
                 pending_.erase(0, emit);
             }
             return true;
         }
 
-        if (position > 0) {
-            if (!on_data(reinterpret_cast<const uint8_t*>(pending_.data()), position)) {
-                return false;
-            }
-            saw_file_ = true;
-            bytes_forwarded_ += position;
-        }
+        if (position > 0 && !forward(position, on_data)) return false;
         pending_.erase(0, position + delimiter_.size());
         state_ = State::PART_HEADERS;
     }
