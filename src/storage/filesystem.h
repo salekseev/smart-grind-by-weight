@@ -90,6 +90,12 @@ public:
     bool begin(bool format_if_mount_failed = false);
     void end();
 
+    /**
+     * True while the partition is mounted. A constant-time lookup that touches
+     * no flash, unlike a usage query, which walks the whole filesystem.
+     */
+    bool is_mounted() const;
+
     /** Open a file, or a directory when `mode` describes a read. */
     FsFile open(const char* path, const char* mode = "r");
 

@@ -220,6 +220,10 @@ void Filesystem::end() {
     mounted_ = false;
 }
 
+bool Filesystem::is_mounted() const {
+    return mounted_ && esp_littlefs_mounted(kPartitionLabel);
+}
+
 std::string Filesystem::to_vfs_path(const char* path) const {
     return join_mount(kMountPath, path ? path : "");
 }

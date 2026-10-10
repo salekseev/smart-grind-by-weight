@@ -289,10 +289,12 @@ void FileIOTask::check_filesystem_health() {
     if (fs_available != filesystem_available) {
         filesystem_available = fs_available;
         LOG_BLE("FileIOTask: Filesystem availability changed to %s\n", fs_available ? "AVAILABLE" : "UNAVAILABLE");
-        
-        if (!fs_available) {
-            handle_filesystem_error();
-        }
+    }
+
+    // An unavailable filesystem is mounted again on every check until that
+    // succeeds, not only when it first becomes unavailable.
+    if (!filesystem_available) {
+        handle_filesystem_error();
     }
     
     if (filesystem_available) {
@@ -301,15 +303,9 @@ void FileIOTask::check_filesystem_health() {
 }
 
 bool FileIOTask::validate_filesystem_access() {
-    // Try a simple filesystem operation to validate access
-    FsFile test_file = filesystem.open("/test_access", "w");
-    if (test_file) {
-        test_file.println("test");
-        test_file.close();
-        filesystem.remove("/test_access");
-        return true;
-    }
-    return false;
+    // A read-only mount check. Writing a probe file here wore the flash every
+    // 30 s, and failed whenever the filesystem was merely full.
+    return filesystem.is_mounted();
 }
 
 void FileIOTask::perform_filesystem_maintenance() {
@@ -322,29 +318,22 @@ void FileIOTask::perform_filesystem_maintenance() {
 }
 
 void FileIOTask::handle_filesystem_error() {
-    LOG_BLE("FileIOTask: Filesystem error detected\n");
-    
-    // Attempt filesystem recovery
+    // Runs on every health check while the filesystem is unavailable, so only
+    // a recovery is logged; the mount itself reports each failure.
     if (attempt_filesystem_recovery()) {
         LOG_BLE("FileIOTask: Filesystem recovery successful\n");
-    } else {
-        LOG_BLE("ERROR: FileIOTask: Filesystem recovery failed\n");
     }
 }
 
 bool FileIOTask::attempt_filesystem_recovery() {
-    LOG_BLE("FileIOTask: Attempting filesystem recovery...\n");
-    
-    // Try to remount the filesystem
-    filesystem.end();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Wait 1 second
-    
-    bool recovery_success = filesystem.begin(true);
-    if (recovery_success) {
-        filesystem_available = true;
+    // Only mount a filesystem that is not mounted. Never unmount one that the
+    // web server, logger or screensaver may be using, and never format: that
+    // would erase the grind history and the screensaver image.
+    if (!filesystem.begin(false) || !filesystem.is_mounted()) {
+        return false;
     }
-    
-    return recovery_success;
+    filesystem_available = true;
+    return true;
 }
 
 void FileIOTask::log_operation_failure(FileIOOperationType type, const char* details) {
