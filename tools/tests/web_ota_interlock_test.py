@@ -41,6 +41,7 @@ class WebOtaInterlockTest(unittest.TestCase):
         harness = r'''
 #include "system/operation_interlock.h"
 #include "system/device_info.h"
+#include "system/string_utils.h"
 #include "network/http_multipart.cpp" // The real streaming parser feeds the writer.
 #include <algorithm>
 #include <atomic>
@@ -69,7 +70,7 @@ struct httpd_req_t {
     size_t content_len = 0, offset = 0, chunk = 61, drop_at = SIZE_MAX;
     int drop_result = 0;
     unsigned timeouts = 0; // HTTPD_SOCK_ERR_TIMEOUT results before the next read.
-    std::string content_type, body;
+    std::string content_type, body, response;
     std::function<void(httpd_req_t*)> on_recv; // Runs before every read.
     std::atomic<int> status{0};
 };
@@ -83,19 +84,19 @@ int httpd_req_recv(httpd_req_t* r, char* buffer, size_t length) {
     return static_cast<int>(n);
 }
 namespace http {
-esp_err_t send(httpd_req_t* r, int status, const char*, const std::string&) {
-    assert(r->status == 0); r->status = status; return ESP_OK;
+esp_err_t send(httpd_req_t* r, int status, const char*, const std::string& body) {
+    assert(r->status == 0); r->response = body; r->status = status; return ESP_OK;
 }
 std::string header(httpd_req_t* r, const char* name) {
     return std::string(name) == "Content-Type" ? r->content_type : std::string();
 }
 }
 const std::string boundary = "----SmartGrindOta";
-void load(httpd_req_t& r, char magic='\xE9') {
+void load(httpd_req_t& r, char magic='\xE9', const std::string& filename="firmware.bin") {
     std::string image(300, 'Z'); image[0] = magic;
     r.content_type = "multipart/form-data; boundary=" + boundary;
     r.body = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"firmware\"; "
-             "filename=\"firmware.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n" +
+             "filename=\"" + filename + "\"\r\nContent-Type: application/octet-stream\r\n\r\n" +
              image + "\r\n--" + boundary + "--\r\n";
     r.content_len = r.body.size();
 }
@@ -288,17 +289,28 @@ int main() {
     assert(stalled.status==500 && stalled.offset>=200 && stalled.offset<stalled.body.size());
     assert(now-stall_started>=http::BODY_IDLE_TIMEOUT_MS);
     assert(!web_firmware_update.opened && !web.is_ota_active()); assert_available();
-    // Failed writer begin/write/validation, a non-image and a non-multipart
-    // upload each clean up and permit retry.
-    for (unsigned failure=0; failure<5; ++failure) {
-        ready(web); httpd_req_t request; load(request, failure==3 ? '\0' : '\xE9');
-        if (failure==4) request.content_type="application/octet-stream";
+    // Failed writer begin/write/validation, a non-image, a file that is not a
+    // .bin and a non-multipart upload each give the answer the Arduino firmware
+    // gave, clean up and permit retry.
+    const struct { int status; const char* message; } expected[]={
+        {500,"Could not open the inactive firmware partition"},
+        {500,"Firmware write failed"},
+        {500,"Firmware update failed"},
+        {400,"Not a valid ESP32 firmware image"},
+        {400,"Not a valid ESP32 firmware image"},
+        {400,"Expected a multipart/form-data firmware upload"},
+    };
+    for (unsigned failure=0; failure<6; ++failure) {
+        ready(web); httpd_req_t request;
+        load(request, failure==3 ? '\0' : '\xE9', failure==4 ? "firmware.elf" : "firmware.bin");
+        if (failure==5) request.content_type="application/octet-stream";
         web_firmware_update.fail_begin=failure==0;
         web_firmware_update.fail_write=failure==1;
         web_firmware_update.valid=failure!=2;
         const unsigned begins=web_firmware_update.begins;
         web.handle_ota_upload(&request);
-        assert(request.status>=400 && web.ota_failed() && (web_firmware_update.begins>begins)==(failure<3));
+        assert(request.status==expected[failure].status && request.response==expected[failure].message);
+        assert(web.ota_failed() && (web_firmware_update.begins>begins)==(failure<3));
         assert(!web.is_ota_active() && !web_firmware_update.opened); assert_available();
     }
     web_firmware_update.fail_begin=false; web_firmware_update.fail_write=false; web_firmware_update.valid=true;
@@ -326,7 +338,8 @@ int main() {
     assert((github_tasks!=tasks)==(browser.status==409));
     if (browser.status==409) { assert(web.is_ota_active()); web.finish_ota(false); }
     assert(!web.is_ota_active() && !web.on_device_update_pending_); assert_available();
-    ready(web); httpd_req_t success; load(success); success.timeouts=1;
+    // The extension check ignores letter case, as the web page's does.
+    ready(web); httpd_req_t success; load(success, '\xE9', "FIRMWARE.BIN"); success.timeouts=1;
     web.handle_ota_upload(&success);
     assert(success.status==200 && web_firmware_update.written==300 && !web_firmware_update.opened);
     assert(web.is_ota_active() && web.reboot_pending_ && !operation_interlock().try_acquire());

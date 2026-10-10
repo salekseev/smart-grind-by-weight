@@ -19,6 +19,16 @@ inline bool starts_with(const std::string& value, const std::string& prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
 }
 
+/** Suffix test that ignores ASCII letter case, as file-extension checks need. */
+inline bool ends_with_ignore_case(const std::string& value, const std::string& suffix) {
+    return value.size() >= suffix.size() &&
+           std::equal(suffix.begin(), suffix.end(), value.end() - suffix.size(),
+                      [](char a, char b) {
+                          return std::tolower(static_cast<unsigned char>(a)) ==
+                                 std::tolower(static_cast<unsigned char>(b));
+                      });
+}
+
 /** Offset of the first occurrence, or -1 when absent. */
 template <typename Needle>
 inline int index_of(const std::string& value, const Needle& needle, size_t from = 0) {

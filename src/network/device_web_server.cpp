@@ -841,19 +841,31 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
     ota_received_.store(0);
     ota_total_.store(request->content_len);
 
+    // The sink records why it stopped the upload, so the response can say so.
+    struct Refusal {
+        int status = 0;
+        const char* message = nullptr;
+    } refusal;
     bool started = false;
-    bool rejected_magic = false;
-    const auto sink = [this, &started, &rejected_magic](const uint8_t* data, size_t length) {
+    const auto sink = [this, &reader, &started, &refusal](const uint8_t* data, size_t length) {
         if (!started) {
-            // An ESP32 application image always begins with the 0xE9 magic byte.
-            if (length == 0 || data[0] != 0xE9) {
-                rejected_magic = true;
+            // Firmware is uploaded as a .bin file, and an ESP32 application image
+            // always begins with the 0xE9 magic byte.
+            if (!strings::ends_with_ignore_case(reader.filename(), ".bin") || length == 0 ||
+                data[0] != 0xE9) {
+                refusal = {400, "Not a valid ESP32 firmware image"};
                 return false;
             }
-            if (!web_firmware_update.begin(0)) return false;
+            if (!web_firmware_update.begin(0)) {
+                refusal = {500, "Could not open the inactive firmware partition"};
+                return false;
+            }
             started = true;
         }
-        if (!web_firmware_update.write(data, length)) return false;
+        if (!web_firmware_update.write(data, length)) {
+            refusal = {500, "Firmware write failed"};
+            return false;
+        }
         ota_received_.fetch_add(length);
         return true;
     };
@@ -864,14 +876,14 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
 
     if (!stream_ok || !reader.saw_file()) {
         web_firmware_update.abort();
-        const char* message = rejected_magic ? "Not a valid ESP32 firmware image"
-                              : !reader.saw_file() ? "Firmware file was not received"
-                                                   : "Firmware update failed";
-        const int status = rejected_magic ? 400 : (!reader.saw_file() ? 400 : 500);
+        if (!refusal.message) {
+            refusal = reader.saw_file() ? Refusal{500, "Firmware update failed"}
+                                        : Refusal{400, "Firmware file was not received"};
+        }
         LOG_BLE("[WEB OTA] Upload aborted at %lu bytes: %s\n",
-                static_cast<unsigned long>(ota_received_.load()), message);
+                static_cast<unsigned long>(ota_received_.load()), refusal.message);
         finish_ota(false);
-        return http::send(request, status, "text/plain", message);
+        return http::send(request, refusal.status, "text/plain", refusal.message);
     }
 
     if (!web_firmware_update.end()) {
