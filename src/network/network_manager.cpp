@@ -57,33 +57,42 @@ void SmartGrindNetworkManager::init(Preferences* preferences) {
 }
 
 bool SmartGrindNetworkManager::ensure_wifi_initialized() {
-    if (station_netif_) return true;
+    if (ip_event_instance_) return true;
 
     // esp_netif and the default event loop are created in app_main before any
-    // service starts, so only the driver and netifs are set up here.
-    station_netif_ = esp_netif_create_default_wifi_sta();
-    access_point_netif_ = esp_netif_create_default_wifi_ap();
+    // service starts, so only the netifs, driver and handlers are set up here.
+    if (!station_netif_) station_netif_ = esp_netif_create_default_wifi_sta();
+    if (!access_point_netif_) access_point_netif_ = esp_netif_create_default_wifi_ap();
     if (!station_netif_ || !access_point_netif_) {
         LOG_BLE("[WIFI] Could not create network interfaces\n");
         return false;
     }
 
-    wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
-    esp_err_t err = esp_wifi_init(&config);
-    if (err != ESP_OK) {
-        LOG_BLE("[WIFI] Driver init failed: %s\n", esp_err_to_name(err));
-        return false;
+    if (!wifi_driver_initialized_) {
+        wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
+        const esp_err_t err = esp_wifi_init(&config);
+        if (err != ESP_OK) {
+            LOG_BLE("[WIFI] Driver init failed: %s\n", esp_err_to_name(err));
+            return false;
+        }
+        // Credentials live in this firmware's own NVS namespace; letting the
+        // driver persist a second copy would make the two disagree after a
+        // factory reset.
+        esp_wifi_set_storage(WIFI_STORAGE_RAM);
+        wifi_driver_initialized_ = true;
     }
 
-    // Credentials live in this firmware's own NVS namespace; letting the driver
-    // persist a second copy would make the two disagree after a factory reset.
-    esp_wifi_set_storage(WIFI_STORAGE_RAM);
-
-    err = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                              wifi_event_handler, this, nullptr);
+    esp_err_t err = ESP_OK;
+    if (!wifi_event_instance_) {
+        err = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                                  wifi_event_handler, this,
+                                                  &wifi_event_instance_);
+        if (err != ESP_OK) wifi_event_instance_ = nullptr;
+    }
     if (err == ESP_OK) {
         err = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                                  ip_event_handler, this, nullptr);
+                                                  ip_event_handler, this, &ip_event_instance_);
+        if (err != ESP_OK) ip_event_instance_ = nullptr;
     }
     if (err != ESP_OK) {
         LOG_BLE("[WIFI] Event registration failed: %s\n", esp_err_to_name(err));
@@ -142,9 +151,12 @@ void SmartGrindNetworkManager::update() {
     }
 
     if (state() == NetworkState::WIFI_CONNECTED) {
+        // Reconnect at once, as the Arduino core's auto-reconnect did. The retry
+        // delay applies once this attempt times out, or if it cannot start.
         stop_mdns();
-        LOG_BLE("[WIFI] Connection lost; retrying in %lus\n", RETRY_DELAY_MS / 1000);
+        LOG_BLE("[WIFI] Connection lost; reconnecting\n");
         set_state(NetworkState::WIFI_RETRY_WAIT);
+        begin_connection();
         return;
     }
 

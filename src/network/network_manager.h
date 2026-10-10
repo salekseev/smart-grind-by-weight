@@ -87,6 +87,9 @@ private:
     std::string hostname_;
     esp_netif_t* station_netif_ = nullptr;
     esp_netif_t* access_point_netif_ = nullptr;
+    bool wifi_driver_initialized_ = false;
+    esp_event_handler_instance_t wifi_event_instance_ = nullptr;
+    esp_event_handler_instance_t ip_event_instance_ = nullptr;
     mutable SemaphoreHandle_t settings_mutex_ = nullptr;
 
     void load_settings();
@@ -96,7 +99,10 @@ private:
     void set_state(NetworkState state);
     void stop_mdns();
 
-    /** Create the Wi-Fi driver and both netifs once, on first use. */
+    /**
+     * Create both netifs, the Wi-Fi driver and the event handlers on first use.
+     * Each step runs once; a step that fails is retried on the next call.
+     */
     bool ensure_wifi_initialized();
     /** Start the radio if it is not running yet. Configure interfaces first. */
     bool start_radio();
