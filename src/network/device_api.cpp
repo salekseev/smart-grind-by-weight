@@ -165,6 +165,15 @@ void DeviceApi::update() {
             backpressure_skips_[index].store(0);
             continue;
         }
+        // A session the server closed without a CLOSE frame, by LRU purge or a
+        // dropped peer, never reaches handle_websocket, and lwIP hands its
+        // descriptor to the next connection. Forget it rather than writing
+        // frames into an unrelated HTTP response.
+        if (httpd_ws_get_fd_info(server_, fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+            slot.store(NO_CLIENT);
+            backpressure_skips_[index].store(0);
+            continue;
+        }
         if (send_text(fd, message)) {
             backpressure_skips_[index].store(0);
             continue;
@@ -449,6 +458,8 @@ esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
 }
 
 void DeviceApi::add_client(int client_fd) {
+    // A reused descriptor may still hold a slot from the session it replaced.
+    remove_client(client_fd);
     for (size_t index = 0; index < MAX_CLIENTS; ++index) {
         auto& slot = client_fds_[index];
         int empty = NO_CLIENT;
