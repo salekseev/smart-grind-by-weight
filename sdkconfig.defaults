@@ -67,9 +67,12 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 #
 # Task watchdog. The weight-sampling and grind-control tasks subscribe
 # explicitly; the idle tasks are excluded because OTA and LVGL rendering
-# legitimately monopolise a core for longer than one watchdog period.
+# legitimately monopolise a core for longer than one watchdog period. A missed
+# deadline resets the chip, as under the Arduino core, so a hung grind-control
+# task cannot leave the motor running.
 #
 CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
