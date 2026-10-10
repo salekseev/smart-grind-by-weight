@@ -56,6 +56,10 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 #
 CONFIG_FREERTOS_HZ=1000
 CONFIG_FREERTOS_USE_TICKLESS_IDLE=n
+# A debug watchpoint on the last 32 bytes of each task's stack panics at the
+# write that overflows it, as under the Arduino core, instead of the canary
+# check noticing at the next context switch. Costs up to 60 bytes of each stack.
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
 
 #
 # The main task hosts the network/OTA service loop and must stay off core 0,
@@ -153,7 +157,14 @@ CONFIG_LITTLEFS_USE_MTIME=y
 # Optimise for speed; the predictive grind controller is latency sensitive.
 #
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
-CONFIG_COMPILER_STACK_CHECK_MODE_NONE=y
+
+#
+# A stack canary in each function with a local array, as under the Arduino core,
+# aborts on a stack smash instead of returning through it; it costs no
+# measurable render time. The Arduino core's light heap poisoning is left off:
+# it costs 13 KB of internal heap.
+#
+CONFIG_COMPILER_STACK_CHECK_MODE_NORM=y
 
 #
 # Logging: the firmware routes its own diagnostics through the BLE/HTTP log
