@@ -2,8 +2,8 @@
 
 ESP32-S3 intelligent coffee scale with grind-by-weight functionality. Features predictive grinding system, LVGL touch UI, and BLE OTA updates. Automatically grinds coffee beans to precise target weights using flow prediction and pulse correction algorithms.
 
-The firmware is a native **ESP-IDF** application (`framework = espidf`, ESP-IDF
-v5.5.5 via the pioarduino platform pin). There is no Arduino core: the entry
+The firmware is a native **ESP-IDF** application, built with ESP-IDF v5.5.5's
+own tooling (`idf.py`, CMake and Ninja). There is no Arduino core: the entry
 point is `app_main()` in `src/main.cpp`, and every peripheral, storage and
 network API is an ESP-IDF one.
 
@@ -18,6 +18,11 @@ PowerShell, enter the canonical checkout with:
 wsl.exe -d Ubuntu-24.04 --cd /home/cmossom/src/smart-grind-by-weight
 ```
 
+Building, flashing and monitoring need ESP-IDF v5.5.5 activated in the shell
+(`source ~/.espressif/tools/activate_idf_v5.5.5.sh` for an EIM install, or
+`. ~/esp/esp-idf/export.sh` for a git install; `idf.py --version` should print
+ESP-IDF v5.5.5). See `docs/DEVELOPMENT.md` for installation.
+
 All development tasks use the unified cross-platform Python tool:
 
 ```bash
@@ -29,14 +34,23 @@ python3 tools/grinder.py analyze
 ```
 
 **Common Commands:**
-- `tools/venv/bin/python3 tools/grinder.py build --hardware v1 --jobs 8` - Build V1 firmware
-- `tools/venv/bin/python3 tools/grinder.py build --hardware v2 --jobs 8` - Build V2 firmware
+- `python3 tools/grinder.py build --hardware v1 --jobs 8` - Build V1 firmware
+- `python3 tools/grinder.py build --hardware v2 --jobs 8` - Build V2 firmware
+- `python3 tools/grinder.py build --hardware debug|mock` - Build the V1 debug or mock firmware
 - `python3 tools/grinder.py upload` - Upload latest firmware via BLE
+- `python3 tools/grinder.py flash-usb --hardware v1|v2 --port <port>` - Flash the latest archived image over USB, keeping settings and data
+- `idf.py -B build/v2 -p <port> flash` - Full USB flash of a board (bootloader, partition table, OTA data, app)
+- `idf.py -B build/<variant> -p <port> monitor` - Serial monitor with backtrace decoding (exit with Ctrl+])
 - `python3 tools/grinder.py export` - Export grind data to database
 - `python3 tools/grinder.py report` - Launch Streamlit report from existing data
 - `python3 tools/grinder.py scan` - Scan for BLE devices
 - `python3 tools/grinder.py info` - Get device system information
-- `python3 tools/grinder.py clean` - Clean build artifacts
+- `python3 tools/grinder.py clean` - Remove every variant's build directory
+
+A build prints its build number and writes
+`build/<variant>/smart-grind-by-weight.bin`; V1 and V2 images are also archived
+as `firmware_cache/waveshare-164-v1/build_NNN.bin` and
+`firmware_cache/waveshare-164-v2/build_NNN.bin`.
 
 ## Architecture
 
@@ -49,22 +63,40 @@ python3 tools/grinder.py analyze
 6. **UI Layer** (`src/ui/`): LVGL touchscreen interface
 
 **ESP-IDF build layout:**
-- `CMakeLists.txt` (root) also adds `include/` to every component's search path
+- `CMakeLists.txt` (root) registers `src/` as the application component
+  (`EXTRA_COMPONENT_DIRS`) and builds only it and its dependencies
+  (`COMPONENTS src`). It also adds `include/` to every component's search path
   so LVGL picks up `lv_conf.h`. LVGL's Kconfig otherwise ignores it, which
   silently drops the fonts the UI needs (`CONFIG_LV_CONF_SKIP=n`).
-- `src/CMakeLists.txt` registers the firmware as the main component.
+- `src/CMakeLists.txt` registers the firmware sources and runs
+  `tools/build-scripts/build_info.py` before every build to write
+  `src/config/git_info.h` (build number and git commit).
 - `src/idf_component.yml` pins the managed dependencies: LVGL, littlefs,
   esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601,
-  improv.
+  improv. They download to `managed_components/`.
 - `components/` holds the vendored delta OTA pair: delta and detools.
 - `sdkconfig.defaults` carries CPU, PSRAM, partition, MAC address, Wi-Fi, BLE,
-  TLS and FreeRTOS settings. `CONFIG_FREERTOS_HZ=1000` is required: the control
-  loops run on 20/25/50 ms periods and would otherwise quantise to 10 ms steps.
-  Generated `sdkconfig.<environment>` files are not checked in; delete one to
-  pick up an edited `sdkconfig.defaults`.
-- Kconfig changes go in `sdkconfig.defaults` for every environment; the `-D`
-  hardware/debug switches stay in `build_flags`. Do not use `custom_sdkconfig`:
-  this platform only merges it for Arduino builds.
+  TLS and FreeRTOS settings shared by every variant. `CONFIG_FREERTOS_HZ=1000`
+  is required: the control loops run on 20/25/50 ms periods and would otherwise
+  quantise to 10 ms steps.
+- Four variants - `v1`, `v2`, `debug`, `mock` - each build in `build/<variant>/`
+  with their own `build/<variant>/sdkconfig`, generated from
+  `sdkconfig.defaults` plus an overlay: `sdkconfig.defaults.v2` (V2 board),
+  `sdkconfig.defaults.debug` (V1, debug optimisation, 2 s startup pause) or
+  `sdkconfig.defaults.mock` (V1, simulated load cell and motor, background
+  indicator). `v1` uses `sdkconfig.defaults` alone.
+- Board and debug switches are Kconfig options in the "Smart Grind" menu
+  (`src/Kconfig.projbuild`): board revision V1/V2, simulated load cell and
+  motor, background tint while the motor runs, startup pause.
+  `src/config/hardware.h` and `src/config/debug.h` map them onto
+  `HW_DISPLAY_VARIANT_V2`, `DEBUG_ENABLE_LOADCELL_MOCK`,
+  `DEBUG_ENABLE_GRINDER_BACKGROUND_INDICATOR` and `UI_DEBUG_SERIAL_DELAY_MS`.
+  There are no `-D` build flags.
+- Kconfig changes go in `sdkconfig.defaults` (every variant) or a variant's
+  overlay. An existing `build/<variant>/sdkconfig` is reused as is: delete it,
+  or run `python3 tools/grinder.py clean`, to regenerate it after editing a
+  defaults file. `idf.py -B build/<variant> menuconfig` edits an already-built
+  variant's sdkconfig (options under "Smart Grind").
 
 **Key native replacements** (no Arduino compatibility layer):
 - Display: `esp_lcd` for both revisions - `esp_lcd_co5300` on V1,
