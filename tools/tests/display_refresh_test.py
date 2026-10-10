@@ -1,5 +1,6 @@
-"""Keep display redraw areas aligned to the panel's drawing windows."""
+"""Keep display redraw areas panel-aligned and LVGL's timers inside the UI cycle."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -49,6 +50,11 @@ int main() {
 '''
 
 
+def define(path, name):
+    text = (ROOT / path).read_text()
+    return re.search(rf"^#define {name} (\S+)", text, re.M).group(1)
+
+
 class DisplayRefreshTest(unittest.TestCase):
     def test_redraw_areas_are_panel_aligned(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -57,6 +63,17 @@ class DisplayRefreshTest(unittest.TestCase):
             subprocess.run(["g++", "-std=c++17", "-Wall", "-Wextra", "-Werror", str(cpp),
                             "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True, timeout=10)
+
+    def test_lvgl_timers_run_faster_than_the_ui_task(self):
+        # Equal periods let scheduling jitter skip a UI cycle and delay a frame.
+        self.assertEqual(define("src/config/system.h", "SYS_LVGL_TIMER_PERIOD_MS"),
+                         "(SYS_TASK_UI_INTERVAL_MS")
+        for timer in ("lv_display_get_refr_timer", "lv_indev_get_read_timer", "lv_anim_get_timer"):
+            self.assertRegex(SOURCE, rf"lv_timer_set_period\({timer}\([^)]*\), SYS_LVGL_TIMER_PERIOD_MS\)")
+
+    def test_draw_buffers_keep_strips_even(self):
+        rows = int(define("src/config/hardware.h", "HW_DISPLAY_DRAW_BUFFER_ROWS"))
+        self.assertEqual(rows % 2, 0)
 
 
 if __name__ == "__main__":

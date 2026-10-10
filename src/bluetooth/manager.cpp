@@ -1219,8 +1219,9 @@ void BluetoothManager::update_performance_info() {
         ? display_metrics.ui_time_us / display_metrics.ui_calls : 0;
     const uint32_t render_avg_us = display_metrics.rendered_frames > 0
         ? display_metrics.render_time_us / display_metrics.rendered_frames : 0;
+    // Average time LVGL waited per flush for the panel to take a buffer.
     const uint32_t flush_avg_us = display_metrics.flushes > 0
-        ? display_metrics.flush_time_us / display_metrics.flushes : 0;
+        ? display_metrics.flush_wait_us / display_metrics.flushes : 0;
 
     snprintf(buffer, sizeof(buffer),
         "{"

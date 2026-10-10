@@ -156,6 +156,7 @@ void DisplayManager::init() {
     pending_flush_display = nullptr;
     direct_draw_pending = false;
     draw_buffer = nullptr;
+    second_draw_buffer = nullptr;
     initialized = false;
     panel_powered_on = true;
     consume_wake_touch_until_release = false;
@@ -175,20 +176,14 @@ void DisplayManager::init() {
     screen_width = HW_DISPLAY_WIDTH_PX;
     screen_height = HW_DISPLAY_HEIGHT_PX;
 
-    // LVGL renders in partial mode straight into DMA-capable internal RAM, so
-    // a flush is a single queued transfer with no intermediate copy.
-    buffer_size = screen_width * HW_DISPLAY_DRAW_BUFFER_ROWS * sizeof(uint16_t);
-    draw_buffer = static_cast<lv_color_t*>(
-        heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, buffer_size,
-                                MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
-    if (!draw_buffer) {
+    if (!allocate_draw_buffers()) {
         LOG_BLE("[DISPLAY] ERROR: Failed to allocate LVGL draw buffer\n");
         return;
     }
 
     lvgl_display = lv_display_create(screen_width, screen_height);
     lv_display_set_flush_cb(lvgl_display, display_flush_cb);
-    lv_display_set_buffers(lvgl_display, draw_buffer, NULL,
+    lv_display_set_buffers(lvgl_display, draw_buffer, second_draw_buffer,
                           buffer_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
 
     lv_display_add_event_cb(lvgl_display, display_rounder_cb, LV_EVENT_INVALIDATE_AREA, NULL);
@@ -200,7 +195,33 @@ void DisplayManager::init() {
     lv_indev_set_type(lvgl_input, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(lvgl_input, touchpad_read_cb);
 
+    // The UI task runs LVGL every SYS_TASK_UI_INTERVAL_MS. LVGL's refresh,
+    // input and animation timers default to the same period, so a little
+    // scheduling jitter made them miss a UI cycle and a ready frame waited
+    // twice as long. With shorter periods every UI cycle can draw a frame.
+    lv_timer_set_period(lv_display_get_refr_timer(lvgl_display), SYS_LVGL_TIMER_PERIOD_MS);
+    lv_timer_set_period(lv_indev_get_read_timer(lvgl_input), SYS_LVGL_TIMER_PERIOD_MS);
+    lv_timer_set_period(lv_anim_get_timer(), SYS_LVGL_TIMER_PERIOD_MS);
+
     initialized = true;
+}
+
+bool DisplayManager::allocate_draw_buffers() {
+    static_assert(HW_DISPLAY_DRAW_BUFFER_ROWS % 2 == 0,
+                  "strips must keep the panel's 2-row window alignment");
+    // LVGL renders in partial mode straight into DMA-capable internal RAM, so
+    // a flush is a single queued transfer with no intermediate copy. With two
+    // buffers it draws the next strip while the previous one is being sent.
+    buffer_size = screen_width * HW_DISPLAY_DRAW_BUFFER_ROWS * sizeof(uint16_t);
+    const uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT;
+    draw_buffer = static_cast<lv_color_t*>(heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, buffer_size, caps));
+    if (!draw_buffer) return false;
+    second_draw_buffer =
+        static_cast<lv_color_t*>(heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, buffer_size, caps));
+    if (!second_draw_buffer) {
+        LOG_BLE("[DISPLAY] Not enough internal RAM for a second draw buffer\n");
+    }
+    return true;
 }
 
 void DisplayManager::update() {
@@ -219,8 +240,8 @@ void DisplayManager::update() {
         metrics_window.window_ms = now_ms - metrics_window_started_ms;
         portENTER_CRITICAL(&metrics_mux);
         metrics_snapshot = metrics_window;
-        metrics_window = {};
         portEXIT_CRITICAL(&metrics_mux);
+        metrics_window = {};
         metrics_window_started_ms = now_ms;
     }
 }
@@ -339,6 +360,15 @@ void DisplayManager::display_metrics_cb(lv_event_t* e) {
                 g_display_manager->render_started_us = 0;
             }
             break;
+        // Transfers run in the background, so the panel only costs the UI the
+        // time LVGL waits for a transfer to free a draw buffer.
+        case LV_EVENT_FLUSH_WAIT_START:
+            g_display_manager->flush_wait_started_us = micros();
+            break;
+        case LV_EVENT_FLUSH_WAIT_FINISH:
+            g_display_manager->metrics_window.flush_wait_us +=
+                micros() - g_display_manager->flush_wait_started_us;
+            break;
         default:
             break;
     }
@@ -356,7 +386,6 @@ void DisplayManager::display_flush_cb(lv_display_t* disp, const lv_area_t* area,
     g_display_manager->metrics_window.pixels += width * height;
 
     g_display_manager->pending_flush_display = disp;
-    g_display_manager->flush_started_us = micros();
     if (esp_lcd_panel_draw_bitmap(g_display_manager->panel_handle,
                                   area->x1, area->y1,
                                   area->x2 + 1, area->y2 + 1,
@@ -382,10 +411,6 @@ bool DisplayManager::color_transfer_done_cb(esp_lcd_panel_io_handle_t,
     if (manager->pending_flush_display) {
         lv_display_t* display = manager->pending_flush_display;
         manager->pending_flush_display = nullptr;
-        // A flush lasts until the panel has consumed the whole transfer.
-        portENTER_CRITICAL_ISR(&manager->metrics_mux);
-        manager->metrics_window.flush_time_us += micros() - manager->flush_started_us;
-        portEXIT_CRITICAL_ISR(&manager->metrics_mux);
         lv_display_flush_ready(display);
     }
     return false;

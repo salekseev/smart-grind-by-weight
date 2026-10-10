@@ -18,7 +18,7 @@ struct DisplayPerformanceSnapshot {
     uint32_t pixels = 0;
     uint32_t ui_time_us = 0;
     uint32_t render_time_us = 0;
-    uint32_t flush_time_us = 0;
+    uint32_t flush_wait_us = 0;  // time LVGL waited for the panel to take a buffer
 };
 
 /**
@@ -43,6 +43,7 @@ private:
     lv_display_t* lvgl_display;
     lv_indev_t* lvgl_input;
     lv_color_t* draw_buffer;
+    lv_color_t* second_draw_buffer;
     TouchDriver touch_driver;
 
     uint32_t screen_width;
@@ -53,14 +54,12 @@ private:
     bool consume_wake_touch_until_release;
     uint32_t wake_touch_guard_started_ms;
 
-    // Guards the metrics against the transfer-complete interrupt, which adds
-    // each flush's duration.
     portMUX_TYPE metrics_mux = portMUX_INITIALIZER_UNLOCKED;
     DisplayPerformanceSnapshot metrics_window;
     DisplayPerformanceSnapshot metrics_snapshot;
     uint32_t metrics_window_started_ms = 0;
     uint32_t render_started_us = 0;
-    uint32_t flush_started_us = 0;
+    uint32_t flush_wait_started_us = 0;
 
 public:
     void init();
@@ -78,6 +77,8 @@ public:
 
 private:
     bool init_panel();
+    /** Allocate the LVGL draw buffers, falling back to one if RAM is short. */
+    bool allocate_draw_buffers();
     /** Push one RGB565 block and block until the panel has consumed it. */
     bool draw_bitmap_blocking(int x, int y, int width, int height, const void* pixels);
 

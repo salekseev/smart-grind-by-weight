@@ -85,5 +85,5 @@
 #define HW_DISPLAY_HEIGHT_PX 456                                               // LCD height in pixels
 #define HW_DISPLAY_OFFSET_X_PX 20                                              // Column of the first visible pixel in panel RAM (both revisions)
 #define HW_DISPLAY_QSPI_FREQUENCY_HZ 40000000                                  // Waveshare reference QSPI clock for both revisions
-#define HW_DISPLAY_DRAW_BUFFER_ROWS 16                                         // LVGL partial-render strip height, sized to stay in internal DMA RAM
+#define HW_DISPLAY_DRAW_BUFFER_ROWS 16                                         // Rows per LVGL draw buffer; two buffers in internal DMA RAM (2 x 8,960 bytes). Must be even
 #define HW_DISPLAY_MINIMAL_BRIGHTNESS_PERCENT 15                               // Minimum brightness percentage (to avoid too dim to see)
