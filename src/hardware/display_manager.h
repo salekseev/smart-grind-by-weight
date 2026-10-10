@@ -53,11 +53,14 @@ private:
     bool consume_wake_touch_until_release;
     uint32_t wake_touch_guard_started_ms;
 
+    // Guards the metrics against the transfer-complete interrupt, which adds
+    // each flush's duration.
     portMUX_TYPE metrics_mux = portMUX_INITIALIZER_UNLOCKED;
     DisplayPerformanceSnapshot metrics_window;
     DisplayPerformanceSnapshot metrics_snapshot;
     uint32_t metrics_window_started_ms = 0;
     uint32_t render_started_us = 0;
+    uint32_t flush_started_us = 0;
 
 public:
     void init();

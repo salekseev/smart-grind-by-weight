@@ -213,6 +213,9 @@ void AutoTuneController::update_priming_phase() {
         case AutoTuneSubPhase::TARING:
             update_tare();
             break;
+
+        default:
+            break;
     }
 }
 

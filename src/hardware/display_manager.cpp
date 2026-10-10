@@ -219,8 +219,8 @@ void DisplayManager::update() {
         metrics_window.window_ms = now_ms - metrics_window_started_ms;
         portENTER_CRITICAL(&metrics_mux);
         metrics_snapshot = metrics_window;
-        portEXIT_CRITICAL(&metrics_mux);
         metrics_window = {};
+        portEXIT_CRITICAL(&metrics_mux);
         metrics_window_started_ms = now_ms;
     }
 }
@@ -353,6 +353,7 @@ void DisplayManager::display_flush_cb(lv_display_t* disp, const lv_area_t* area,
     g_display_manager->metrics_window.pixels += width * height;
 
     g_display_manager->pending_flush_display = disp;
+    g_display_manager->flush_started_us = micros();
     if (esp_lcd_panel_draw_bitmap(g_display_manager->panel_handle,
                                   area->x1, area->y1,
                                   area->x2 + 1, area->y2 + 1,
@@ -378,6 +379,10 @@ bool DisplayManager::color_transfer_done_cb(esp_lcd_panel_io_handle_t,
     if (manager->pending_flush_display) {
         lv_display_t* display = manager->pending_flush_display;
         manager->pending_flush_display = nullptr;
+        // A flush lasts until the panel has consumed the whole transfer.
+        portENTER_CRITICAL_ISR(&manager->metrics_mux);
+        manager->metrics_window.flush_time_us += micros() - manager->flush_started_us;
+        portEXIT_CRITICAL_ISR(&manager->metrics_mux);
         lv_display_flush_ready(display);
     }
     return false;

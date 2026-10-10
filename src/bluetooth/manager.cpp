@@ -254,16 +254,8 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     sysinfo_diagnostics_characteristic->setCallbacks(this);
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_CHARACTERISTIC_DELAY_MS));
 
-    ota_service->start();
-    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
-    
-    data_service->start();
-    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
-    
-    debug_service->start();
-    vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
-    
-    sysinfo_service->start();
+    // Starting the server registers all four services with the GATT server.
+    ble_server->start();
     vTaskDelay(pdMS_TO_TICKS(BLE_INIT_START_DELAY_MS));
 
     // The device name is the only payload: the four 128-bit service UUIDs do not

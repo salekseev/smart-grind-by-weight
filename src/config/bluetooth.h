@@ -77,7 +77,7 @@
 #define BLE_INIT_SERVER_DELAY_MS 50                                            // Delay after server creation
 #define BLE_INIT_SERVICE_DELAY_MS 25                                           // Delay after service creation
 #define BLE_INIT_CHARACTERISTIC_DELAY_MS 25                                    // Delay after each characteristic setup
-#define BLE_INIT_START_DELAY_MS 50                                             // Delay after service start
+#define BLE_INIT_START_DELAY_MS 50                                             // Delay after the GATT server starts
 #define BLE_INIT_ADVERTISING_DELAY_MS 25                                       // Delay after advertising setup
 
 //------------------------------------------------------------------------------
