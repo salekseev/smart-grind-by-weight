@@ -4,17 +4,16 @@
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
 #include <esp_mac.h>
-#include <esp_system.h>
 #include <soc/rtc.h>
 
 namespace device_info {
 
 size_t free_heap_bytes() {
-    return esp_get_free_heap_size();
+    return heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
 }
 
 size_t total_heap_bytes() {
-    return heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    return heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
 }
 
 size_t free_internal_heap_bytes() {
@@ -38,9 +37,10 @@ size_t flash_chip_size_bytes() {
 uint64_t efuse_mac() {
     uint8_t mac[6] = {};
     if (esp_efuse_mac_get_default(mac) != ESP_OK) return 0;
+    // Last byte first, so mac[0] lands in the least significant byte.
     uint64_t value = 0;
-    for (uint8_t byte : mac) {
-        value = (value << 8) | byte;
+    for (int i = 5; i >= 0; --i) {
+        value = (value << 8) | mac[i];
     }
     return value;
 }

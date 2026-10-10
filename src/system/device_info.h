@@ -12,13 +12,20 @@
 
 namespace device_info {
 
-/** Free bytes across every heap region (internal + PSRAM). */
+/**
+ * Free bytes of internal RAM, excluding PSRAM. This is the figure the
+ * heartbeat, BLE system info, status API and menu have always reported
+ * (Arduino's ESP.getFreeHeap()), so readings compare across firmware versions.
+ */
 size_t free_heap_bytes();
 
-/** Total bytes across every heap region (internal + PSRAM). */
+/** Total bytes of internal RAM, excluding PSRAM (Arduino's ESP.getHeapSize()). */
 size_t total_heap_bytes();
 
-/** Free bytes in internal (DMA-capable) RAM only. */
+/**
+ * Free bytes of byte-addressable internal RAM, the measure the OTA admission
+ * checks and the status API's free_internal_heap field use.
+ */
 size_t free_internal_heap_bytes();
 
 /** Largest single allocatable block of internal RAM. */
@@ -30,7 +37,12 @@ size_t free_psram_bytes();
 /** Size of the attached SPI flash chip in bytes. */
 size_t flash_chip_size_bytes();
 
-/** Factory-programmed 48-bit MAC address, used as the stable device identifier. */
+/**
+ * Factory-programmed 48-bit MAC address, used as the stable device identifier.
+ * The first MAC byte is the least significant, as Arduino's ESP.getEfuseMac()
+ * returned it: the setup hotspot name and the device_id reported over the API
+ * and mDNS derive from this value, so a different order renames a grinder.
+ */
 uint64_t efuse_mac();
 
 /** Current CPU frequency in MHz. */
