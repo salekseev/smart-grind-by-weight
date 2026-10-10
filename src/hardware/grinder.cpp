@@ -30,13 +30,12 @@ void Grinder::init(int pin) {
 #endif
     
     // Initialize RMT for all motor control (both continuous and pulse)
-    rmt_tx_channel_config_t tx_chan_config = {
-        .gpio_num = (gpio_num_t)motor_pin,
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = 1000000, // 1MHz resolution = 1µs per tick
-        .mem_block_symbols = 64,
-        .trans_queue_depth = 4,
-    };
+    rmt_tx_channel_config_t tx_chan_config{};
+    tx_chan_config.gpio_num = static_cast<gpio_num_t>(motor_pin);
+    tx_chan_config.clk_src = RMT_CLK_SRC_DEFAULT;
+    tx_chan_config.resolution_hz = 1000000; // 1MHz resolution = 1µs per tick
+    tx_chan_config.mem_block_symbols = 64;
+    tx_chan_config.trans_queue_depth = 4;
     
     gpio_reset_pin(static_cast<gpio_num_t>(motor_pin));
     gpio_set_direction(static_cast<gpio_num_t>(motor_pin), GPIO_MODE_OUTPUT);
@@ -85,9 +84,8 @@ void Grinder::start() {
     symbols[0].duration1 = 32767;
     symbols[0].level1 = 1;
     
-    rmt_transmit_config_t tx_config = {
-        .loop_count = -1, // Infinite loop
-    };
+    rmt_transmit_config_t tx_config{};
+    tx_config.loop_count = -1; // Infinite loop
     
     if (rmt_transmit(rmt_channel, current_encoder, symbols, sizeof(symbols[0]), &tx_config) != ESP_OK) {
         LOG_BLE("[Grinder] Failed to start continuous transmission\n");

@@ -1406,7 +1406,7 @@ void BluetoothManager::generate_diagnostic_report() {
     uint32_t flash_size = device_info::flash_chip_size_bytes();
 
     const char* driver_type =
-#ifdef MOCK_BUILD
+#if DEBUG_ENABLE_LOADCELL_MOCK
         "MOCK";
 #else
         "REAL";

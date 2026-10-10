@@ -17,8 +17,17 @@
 #define HW_TOUCH_I2C_ADDRESS 0x38                                              // I2C address of FT3168 touch controller
 
 // Display Controller (QSPI)
+// The board revision comes from the Kconfig "Smart Grind" menu. The desktop
+// simulator and host tests have no sdkconfig and build for V1.
+#if __has_include("sdkconfig.h")
+#include "sdkconfig.h"
+#endif
 #ifndef HW_DISPLAY_VARIANT_V2
-#define HW_DISPLAY_VARIANT_V2 0                                               // V1 remains the default hardware target
+#ifdef CONFIG_SMART_GRIND_BOARD_V2
+#define HW_DISPLAY_VARIANT_V2 1
+#else
+#define HW_DISPLAY_VARIANT_V2 0
+#endif
 #endif
 
 #if HW_DISPLAY_VARIANT_V2 != 0 && HW_DISPLAY_VARIANT_V2 != 1

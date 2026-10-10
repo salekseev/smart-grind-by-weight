@@ -1,7 +1,8 @@
-.pio
-
-# ESP-IDF build outputs
-sdkconfig.waveshare-*
+# ESP-IDF build outputs: one directory per firmware variant, each with its own
+# sdkconfig
+/build/
+/sdkconfig
+/sdkconfig.old
 managed_components/
 dependencies.lock
 .vscode/
