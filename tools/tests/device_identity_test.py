@@ -72,6 +72,12 @@ int main() {
                             "-fsanitize=address,undefined", str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True, timeout=10)
 
+    def test_bluetooth_address_matches_arduino(self):
+        # The Arduino core reserved two universal MAC addresses, which puts the
+        # Bluetooth address at base + 1; four would move it to base + 2.
+        settings = (ROOT / "sdkconfig.defaults").read_text().splitlines()
+        self.assertIn("CONFIG_ESP32S3_UNIVERSAL_MAC_ADDRESSES_TWO=y", settings)
+
 
 if __name__ == "__main__":
     unittest.main()

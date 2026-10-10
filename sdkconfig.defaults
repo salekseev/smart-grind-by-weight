@@ -68,6 +68,13 @@ CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
 
 #
+# Two universally administered MAC addresses, as the Arduino core used: Wi-Fi
+# station = base MAC, Bluetooth = base + 1. With four, Bluetooth moves to
+# base + 2 and an upgraded grinder appears to clients as a new device.
+#
+CONFIG_ESP32S3_UNIVERSAL_MAC_ADDRESSES_TWO=y
+
+#
 # Bluetooth Low Energy via NimBLE, peripheral role only
 #
 CONFIG_BT_ENABLED=y
