@@ -1,6 +1,7 @@
 #include "http_support.h"
 
 #include <esp_err.h>
+#include <sdkconfig.h>
 
 #include <cstdio>
 #include <cstring>
@@ -10,6 +11,12 @@
 #include "../config/constants.h"
 #include "../storage/filesystem.h"
 #include "../system/timing.h"
+
+// websocket_route hands the connection-time call to the server's post-handshake
+// callback. Without it a WebSocket client is never admitted or origin-checked.
+#if !CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT
+#error "WebSocket routes need CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT=y (ESP-IDF 5.5.5 or later)"
+#endif
 
 namespace http {
 namespace {
@@ -119,6 +126,9 @@ bool register_route(httpd_handle_t server, const char* uri, httpd_method_t metho
     descriptor.is_websocket = websocket;
     // Control frames reach the handler so a client close can drop its slot.
     descriptor.handle_ws_control_frames = websocket;
+    // The server calls the handler only for frames; the handshake GET arrives
+    // through this callback instead.
+    if (websocket) descriptor.ws_post_handshake_cb = dispatch;
 
     const esp_err_t err = httpd_register_uri_handler(server, &descriptor);
     if (err != ESP_OK) {

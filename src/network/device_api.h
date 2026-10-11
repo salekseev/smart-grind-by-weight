@@ -117,6 +117,8 @@ private:
     esp_err_t handle_websocket(httpd_req_t* request);
     void add_client(int client_fd);
     void remove_client(int client_fd);
+    /** True when the socket holds a client slot, i.e. passed the handshake checks. */
+    bool is_client(int client_fd) const;
     void queue_command(int client_fd, const uint8_t* data, size_t len);
     /** Send one text frame; false when the socket is gone or would block. */
     bool send_text(int client_fd, const std::string& message);

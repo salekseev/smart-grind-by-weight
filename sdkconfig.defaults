@@ -119,6 +119,10 @@ CONFIG_BT_NIMBLE_LOG_LEVEL_NONE=y
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_HTTPD_MAX_URI_LEN=512
 CONFIG_HTTPD_WS_SUPPORT=y
+# ESP-IDF passes only frames to a WebSocket route's handler; this callback is
+# the one call made when a client connects, where /ws checks the Origin and
+# registers the client.
+CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT=y
 CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
 
 #

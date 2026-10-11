@@ -30,7 +30,8 @@ bool route(httpd_handle_t server, const char* uri, httpd_method_t method, Handle
  * Register a WebSocket endpoint.
  *
  * The handler is called once with `req->method == HTTP_GET` after a successful
- * handshake, then once per received frame.
+ * handshake, through the server's post-handshake callback, then once per
+ * received frame.
  */
 bool websocket_route(httpd_handle_t server, const char* uri, Handler handler);
 

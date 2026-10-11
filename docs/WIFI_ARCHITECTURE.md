@@ -99,7 +99,9 @@ optional Improv extensions and currently return `Unknown RPC command`.
 The device serves `/ws` and publishes at most one state message every 100 ms.
 It accepts no more than four clients and disconnects a client whose outbound
 queue cannot keep up. Browser handshakes must have the same HTTP origin as the
-device page; native clients without an `Origin` header remain supported.
+device page; native clients without an `Origin` header remain supported. A
+socket that was not admitted at its handshake is closed on its first frame, so
+its commands never run.
 
 State messages have this shape:
 

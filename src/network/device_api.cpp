@@ -406,6 +406,13 @@ esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
         return ESP_OK;
     }
 
+    // Frames are accepted only from a client admitted above, whose Origin
+    // matched; any other socket could start the motor from a foreign page.
+    if (!is_client(client_fd)) {
+        httpd_sess_trigger_close(server_, client_fd);
+        return ESP_OK;
+    }
+
     httpd_ws_frame_t frame = {};
     if (httpd_ws_recv_frame(request, &frame, 0) != ESP_OK) {
         remove_client(client_fd);
@@ -481,6 +488,14 @@ void DeviceApi::remove_client(int client_fd) {
             backpressure_skips_[index].store(0);
         }
     }
+}
+
+bool DeviceApi::is_client(int client_fd) const {
+    if (client_fd == NO_CLIENT) return false;
+    for (const auto& slot : client_fds_) {
+        if (slot.load() == client_fd) return true;
+    }
+    return false;
 }
 
 void DeviceApi::queue_command(int client_fd, const uint8_t* data, size_t len) {

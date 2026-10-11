@@ -2,8 +2,10 @@
 ## Exact versions are intentional: a silent upgrade of LVGL or the BLE stack
 ## changes flash layout and timing behaviour on a device that grinds by weight.
 dependencies:
+  # 5.5.5 is the first 5.5 release with the WebSocket post-handshake callback
+  # the /ws route relies on.
   idf:
-    version: ">=5.5"
+    version: ">=5.5.5"
 
   # Touch UI
   lvgl/lvgl: "==9.5.0"
