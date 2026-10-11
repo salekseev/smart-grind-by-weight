@@ -199,12 +199,12 @@ dependencies pinned in `src/idf_component.yml` into `managed_components/`.
   simulated load cell and motor, screen tint while the motor runs, and the
   startup pause
 - `src/idf_component.yml` - managed dependencies (LVGL, littlefs, NimBLE-C++,
-  mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601, improv)
+  esp_delta_ota, mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601,
+  improv)
 - `sdkconfig.defaults` - CPU, PSRAM, partitions, BLE, TLS and FreeRTOS settings
   shared by every variant
 - `sdkconfig.defaults.v2`, `sdkconfig.defaults.debug` and
   `sdkconfig.defaults.mock` - variant overlays layered on `sdkconfig.defaults`
-- `components/` - vendored delta OTA components (delta, detools)
 
 ### Configuration
 

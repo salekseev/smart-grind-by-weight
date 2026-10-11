@@ -1,8 +1,13 @@
 #include "ota_handler.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <memory>
+#include <new>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_delta_ota.h>
 #include <esp_system.h>
 #include "../system/device_info.h"
 #include "../config/build_info.h"
@@ -12,9 +17,41 @@
 #include "../tasks/task_manager.h"
 #include "../system/string_utils.h"
 #include <sdkconfig.h>
-#include <climits>
 
 extern HardwareManager hardware_manager;
+
+namespace {
+
+constexpr char kPatchPartitionLabel[] = "patch";
+constexpr uint32_t kFlashSectorSize = 0x1000;
+// Erasing the patch area in pieces keeps each flash operation short.
+constexpr uint32_t kPatchEraseChunk = 256U * 1024U;
+// The stored patch is fed to esp_delta_ota this many bytes at a time.
+constexpr size_t kPatchReadChunk = 4096;
+
+// Where esp_delta_ota reads the image a patch was made against and writes the
+// image it produces.
+struct DeltaTarget {
+    // The running image, or nullptr for a full update, whose patch was made
+    // against an empty image.
+    const esp_partition_t* source;
+    esp_ota_handle_t image;
+};
+
+esp_err_t read_source(uint8_t* buffer, size_t size, int offset, void* user_data) {
+    const auto* target = static_cast<const DeltaTarget*>(user_data);
+    if (!target->source) {
+        memset(buffer, 0, size);
+        return ESP_OK;
+    }
+    return esp_partition_read(target->source, static_cast<size_t>(offset), buffer, size);
+}
+
+esp_err_t write_image(const uint8_t* buffer, size_t size, void* user_data) {
+    return esp_ota_write(static_cast<DeltaTarget*>(user_data)->image, buffer, size);
+}
+
+}  // namespace
 
 OTAHandler::OTAHandler() 
     : ota_in_progress(false)
@@ -117,15 +154,15 @@ bool OTAHandler::start_ota(uint32_t size, const std::string& expected_build_numb
         LOG_OTA_DEBUG("start_ota() FAILED - already in progress\n");
         return false;
     }
-    // The delta library rounds a signed int up to an erase page. Validate
-    // before changing preferences, suspending tasks, or erasing any flash.
+    // The patch must fit the patch partition's whole sectors. Validate before
+    // changing preferences, suspending tasks, or erasing any flash.
     const esp_partition_t* patch = esp_partition_find_first(
-        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "patch");
-    if (size == 0 || size > INT_MAX - (PARTITION_PAGE_SIZE - 1) ||
-        !patch || size > (patch->size / PARTITION_PAGE_SIZE) * PARTITION_PAGE_SIZE) {
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, kPatchPartitionLabel);
+    if (size == 0 || !patch || size > (patch->size / kFlashSectorSize) * kFlashSectorSize) {
         current_status = BLE_OTA_ERROR;
         return false;
     }
+    patch_partition = patch;
     
     const auto token = operation_interlock().try_acquire();
     if (!token) return false;
@@ -204,8 +241,8 @@ bool OTAHandler::process_data_chunk(const uint8_t* data, size_t size) {
         return false;
     }
     
-    // Write patch data to patch partition
-    if (delta_partition_write(&patch_writer, (const char*)data, size) != ESP_OK) {
+    // Store the chunk in the patch partition; it is applied once complete.
+    if (esp_partition_write(patch_partition, received_size, data, size) != ESP_OK) {
         LOG_BLE("OTA: Patch write failed at offset %lu\n", (unsigned long)received_size);
         current_status = BLE_OTA_ERROR;
         recover_failed_update();
@@ -347,10 +384,15 @@ float OTAHandler::get_progress() const {
 }
 
 bool OTAHandler::start_update() {
-    // Initialize patch partition for writing
-    if (delta_partition_init(&patch_writer, "patch", patch_size) != ESP_OK) {
-        LOG_BLE("OTA: Failed to initialize patch partition\n");
-        return false;
+    // Erase the sectors the patch will occupy.
+    const uint32_t erase_size =
+        ((patch_size + kFlashSectorSize - 1) / kFlashSectorSize) * kFlashSectorSize;
+    for (uint32_t erased = 0; erased < erase_size; erased += kPatchEraseChunk) {
+        const uint32_t chunk = std::min(kPatchEraseChunk, erase_size - erased);
+        if (esp_partition_erase_range(patch_partition, erased, chunk) != ESP_OK) {
+            LOG_BLE("OTA: Failed to erase the patch partition\n");
+            return false;
+        }
     }
     return true;
 }
@@ -395,27 +437,42 @@ bool OTAHandler::finalize_update() {
     LOG_BLE("OTA Info: Running from '%s', updating to '%s'\n", 
                   running_partition->label, update_partition->label);
 
-    // Set up delta options for the A/B update
-    LOG_OTA_DEBUG("Setting up delta options...\n");
-    delta_opts_t opts;
-    opts.src = running_partition->label;
-    opts.dest = update_partition->label;
-    opts.patch = "patch";
-    opts.is_full_update = this->is_full_update ? 1 : 0;
-    LOG_OTA_DEBUG("Delta opts: src=%s, dest=%s, patch=%s, is_full=%d\n", 
-                  opts.src, opts.dest, opts.patch, opts.is_full_update);
-    
-    // Apply the delta patch
-    LOG_OTA_DEBUG("Calling delta_check_and_apply() with size=%lu...\n", (unsigned long)patch_size);
-        fflush(stdout);
-    int result = delta_check_and_apply(patch_size, &opts);
-    LOG_OTA_DEBUG("delta_check_and_apply() returned: %d\n", result);
-    if (result < 0) {
-        LOG_BLE("Delta patch failed: %s\n", delta_error_as_string(result));
-        LOG_OTA_DEBUG("Delta patch FAILED with error: %s\n", delta_error_as_string(result));
+    // esp_delta_ota rebuilds the new image from the running one and the stored
+    // patch, writing it to the inactive partition as it goes.
+    DeltaTarget target{is_full_update ? nullptr : running_partition, 0};
+    esp_err_t err = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &target.image);
+    if (err != ESP_OK) {
+        LOG_BLE("OTA: Could not open the inactive partition: %s\n", esp_err_to_name(err));
         return false;
     }
-    
+    esp_delta_ota_cfg_t delta_config = {};
+    delta_config.user_data = &target;
+    delta_config.read_cb_with_user_data = read_source;
+    delta_config.write_cb_with_user_data = write_image;
+    esp_delta_ota_handle_t delta = esp_delta_ota_init(&delta_config);
+    const std::unique_ptr<uint8_t[]> chunk(new (std::nothrow) uint8_t[kPatchReadChunk]);
+    bool applied = delta && chunk;
+    for (uint32_t offset = 0; applied && offset < patch_size; offset += kPatchReadChunk) {
+        const size_t length = std::min<size_t>(kPatchReadChunk, patch_size - offset);
+        applied = esp_partition_read(patch_partition, offset, chunk.get(), length) == ESP_OK &&
+                  esp_delta_ota_feed_patch(delta, chunk.get(), static_cast<int>(length)) == ESP_OK;
+    }
+    applied = applied && esp_delta_ota_finalize(delta) == ESP_OK;
+    if (delta) esp_delta_ota_deinit(delta);
+    if (!applied) {
+        LOG_BLE("OTA: Delta patch could not be applied\n");
+        esp_ota_abort(target.image);
+        return false;
+    }
+
+    // esp_ota_end validates the image the patch produced.
+    err = esp_ota_end(target.image);
+    if (err == ESP_OK) err = esp_ota_set_boot_partition(update_partition);
+    if (err != ESP_OK) {
+        LOG_BLE("OTA: Patched image was not accepted: %s\n", esp_err_to_name(err));
+        return false;
+    }
+
     LOG_OTA_DEBUG("finalize_update() SUCCESS - delta patch applied\n");
     return true;
 }

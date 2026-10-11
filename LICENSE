@@ -37,7 +37,7 @@ This project incorporates several third-party libraries and components:
 - littlefs: BSD 3-Clause License (https://github.com/littlefs-project/littlefs)
 - Improv Wi-Fi SDK: Apache 2.0 License (https://github.com/improv-wifi/sdk-cpp)
 - detools: BSD 2-Clause License (https://github.com/eerimoq/detools)
-- esp32_compressed_delta_ota_update: Apache 2.0 License (https://github.com/espressif-projects/esp32_compressed_delta_ota_update)
+- esp_delta_ota: Apache 2.0 License (https://components.espressif.com/components/espressif/esp_delta_ota)
 - HX711_ADC: MIT License (https://github.com/olkal/HX711_ADC)
 
 See individual component documentation for complete license information.

@@ -1,6 +1,6 @@
 # The firmware sources form the project's application component, which the root
 # CMakeLists.txt registers. Third-party dependencies are declared in
-# idf_component.yml; the delta OTA pair lives under components/.
+# idf_component.yml.
 file(GLOB_RECURSE app_sources
      "${CMAKE_CURRENT_LIST_DIR}/*.c"
      "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
@@ -32,9 +32,8 @@ idf_component_register(
         nvs_flash
         spi_flash
         vfs
-        # Managed / local components
-        delta
-        detools
+        # Managed components
+        esp_delta_ota
         esp_lcd_co5300
         esp_lcd_sh8601
         esp_websocket_client

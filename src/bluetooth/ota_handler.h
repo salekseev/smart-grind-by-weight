@@ -5,16 +5,11 @@
 
 #include "../storage/preferences.h"
 #include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_app_format.h>
 #include "../system/operation_interlock.h"
-
-// Include detools/delta libraries
-extern "C" {
-#include "delta.h"
-#include "detools.h"
-}
 
 // Removed config.h - not needed for HX711Core integration
 #include "../config/constants.h"
@@ -68,8 +63,8 @@ private:
     BLEPowerState power_state;
     uint32_t normal_cpu_freq_mhz;
     
-    // Delta OTA components
-    delta_partition_writer_t patch_writer;
+    // The received patch is stored here, then applied by esp_delta_ota.
+    const esp_partition_t* patch_partition = nullptr;
     
     void reduce_power_for_ble();
     void restore_normal_power();

@@ -72,9 +72,8 @@ as `firmware_cache/waveshare-164-v1/build_NNN.bin` and
   `tools/build-scripts/build_info.py` before every build to write
   `src/config/git_info.h` (build number and git commit).
 - `src/idf_component.yml` pins the managed dependencies: LVGL, littlefs,
-  esp-nimble-cpp, mdns, esp_websocket_client, esp_lcd_co5300, esp_lcd_sh8601,
-  improv. They download to `managed_components/`.
-- `components/` holds the vendored delta OTA pair: delta and detools.
+  esp-nimble-cpp, esp_delta_ota, mdns, esp_websocket_client, esp_lcd_co5300,
+  esp_lcd_sh8601, improv. They download to `managed_components/`.
 - `sdkconfig.defaults` carries CPU, PSRAM, partition, MAC address, Wi-Fi, BLE,
   TLS and FreeRTOS settings shared by every variant. `CONFIG_FREERTOS_HZ=1000`
   is required: the control loops run on 20/25/50 ms periods and would otherwise

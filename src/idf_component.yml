@@ -18,6 +18,8 @@ dependencies:
 
   # BLE OTA, data export and diagnostics services
   h2zero/esp-nimble-cpp: "==2.5.0"
+  # Applies the detools/heatshrink delta patches BLE updates deliver
+  espressif/esp_delta_ota: "==1.1.4"
 
   # Network services
   espressif/mdns: "==1.11.3"

@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.16.0)
 
-# The firmware sources in src/ form the application component. The delta OTA
-# pair under components/ is found automatically. Building only that component
-# and what it requires keeps unused ESP-IDF components, and the startup hooks
-# some of them register, out of the image.
+# The firmware sources in src/ form the application component. Building only
+# that component and what it requires keeps unused ESP-IDF components, and the
+# startup hooks some of them register, out of the image.
 set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/src")
 set(COMPONENTS src)
 
