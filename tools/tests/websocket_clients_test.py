@@ -190,12 +190,20 @@ enum httpd_method_t { HTTP_DELETE = 0, HTTP_GET = 1 };
 enum httpd_ws_type_t { HTTPD_WS_TYPE_TEXT = 1, HTTPD_WS_TYPE_CLOSE = 8,
                        HTTPD_WS_TYPE_PING = 9, HTTPD_WS_TYPE_PONG = 10 };
 struct httpd_ws_frame_t { bool final; bool fragmented; httpd_ws_type_t type; uint8_t* payload; size_t len; };
-struct httpd_req_t { int method; int fd; bool cross_origin; std::string text; };
+struct httpd_req_t {
+    int method; int fd; bool cross_origin; std::string text;
+    httpd_ws_type_t type = HTTPD_WS_TYPE_TEXT;
+    int payload_reads = 0;  // recv_frame calls that consumed the payload
+};
 int httpd_req_to_sockfd(httpd_req_t* request) { return request->fd; }
 esp_err_t httpd_ws_recv_frame(httpd_req_t* request, httpd_ws_frame_t* frame, size_t max_len) {
-    frame->type = HTTPD_WS_TYPE_TEXT;
+    frame->type = request->type;
     frame->len = request->text.size();
-    if (max_len) memcpy(frame->payload, request->text.data(), std::min(max_len, request->text.size()));
+    if (max_len) {
+        if (frame->len > max_len) return ESP_FAIL;
+        memcpy(frame->payload, request->text.data(), frame->len);
+        ++request->payload_reads;
+    }
     return ESP_OK;
 }
 esp_err_t httpd_ws_send_frame(httpd_req_t*, httpd_ws_frame_t*) { return ESP_OK; }
@@ -250,6 +258,13 @@ int main() {
     httpd_req_t page_start{HTTP_DELETE, 60, false, start};
     api.handle_websocket(&page_start);
     assert(api.commands.size() == 1 && closed.empty());
+
+    // An unsolicited PONG's payload is consumed, as esp_http_server requires,
+    // so the next frame header is read from the right place; the client stays.
+    httpd_req_t pong{HTTP_DELETE, 60, false, "heartbeat"};
+    pong.type = HTTPD_WS_TYPE_PONG;
+    assert(api.handle_websocket(&pong) == ESP_OK);
+    assert(pong.payload_reads == 1 && api.commands.size() == 1 && closed.empty());
 
     // A foreign page is refused at the handshake, and a frame it sends
     // regardless never reaches the command queue.

@@ -420,14 +420,17 @@ esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
     }
 
     // This route asks for control frames so a client close releases its slot,
-    // which also makes answering them our responsibility.
-    if (frame.type == HTTPD_WS_TYPE_CLOSE || frame.type == HTTPD_WS_TYPE_PING) {
+    // which also makes consuming and answering them our responsibility: a
+    // payload left unread would be parsed as the next frame's header.
+    if (frame.type == HTTPD_WS_TYPE_CLOSE || frame.type == HTTPD_WS_TYPE_PING ||
+        frame.type == HTTPD_WS_TYPE_PONG) {
         uint8_t control_payload[125] = {};
         frame.payload = control_payload;
         if (httpd_ws_recv_frame(request, &frame, sizeof(control_payload)) != ESP_OK) {
             remove_client(client_fd);
             return ESP_FAIL;
         }
+        if (frame.type == HTTPD_WS_TYPE_PONG) return ESP_OK;
         const bool closing = frame.type == HTTPD_WS_TYPE_CLOSE;
         if (closing) {
             remove_client(client_fd);
@@ -446,7 +449,6 @@ esp_err_t DeviceApi::handle_websocket(httpd_req_t* request) {
         xSemaphoreGive(ws_send_mutex_);
         return err;
     }
-    if (frame.type == HTTPD_WS_TYPE_PONG) return ESP_OK;
 
     if (frame.type != HTTPD_WS_TYPE_TEXT || frame.len == 0 || frame.len > 255) {
         httpd_sess_trigger_close(server_, client_fd);
