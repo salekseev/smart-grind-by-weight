@@ -285,8 +285,10 @@ class WebSocketClientsTest(unittest.TestCase):
         compile_and_run(ROUTE_HARNESS, "route")
         defaults = (ROOT / "sdkconfig.defaults").read_text()
         self.assertRegex(defaults, r"(?m)^CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT=y$")
+        # ESP-IDF 5.5.5 is the first 5.5 release with the post-handshake callback.
         manifest = (ROOT / "src/idf_component.yml").read_text()
-        self.assertRegex(manifest, r'idf:\s*\n\s*version: ">=5\.5\.5"')
+        minimum = re.search(r'idf:\s*\n\s*version: ">=([\d.]+)"', manifest).group(1)
+        self.assertGreaterEqual(tuple(int(part) for part in minimum.split(".")), (5, 5, 5))
 
     def test_frames_from_unadmitted_sockets_are_dropped(self):
         compile_and_run(FRAME_HARNESS, "frames")

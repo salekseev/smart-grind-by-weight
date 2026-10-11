@@ -37,9 +37,9 @@ of truth.
 
 ### Firmware prerequisites
 
-- **ESP-IDF v5.5.5** for building and flashing the firmware; see
+- **ESP-IDF v6.1** for building and flashing the firmware; see
   [ESP-IDF Toolchain](#esp-idf-toolchain)
-- **Python 3.8+** with pip
+- **Python 3.10+** with pip, the oldest Python ESP-IDF v6.1 supports
 - **Git** for version control
 - **USB cable** for initial firmware flashing
 - **Hardware** (ESP32-S3 board, HX711, load cell) for testing
@@ -55,7 +55,7 @@ see [Desktop Simulator](#desktop-simulator).
    cd smart-grind-by-weight
    ```
 
-2. **Install and activate ESP-IDF v5.5.5** as described in
+2. **Install and activate ESP-IDF v6.1** as described in
    [ESP-IDF Toolchain](#esp-idf-toolchain).
 
 3. **Install the Python tools:**
@@ -156,17 +156,17 @@ The firmware is a native **ESP-IDF** application and builds with ESP-IDF's own
 tooling: `idf.py`, CMake and Ninja.
 
 **Toolchain Details:**
-- **Framework**: ESP-IDF v5.5.5
+- **Framework**: ESP-IDF v6.1
 - **Target**: ESP32-S3 with AMOLED touch display
 
-**Install ESP-IDF v5.5.5** once, using either:
+**Install ESP-IDF v6.1** once, using either:
 - Espressif's [ESP-IDF Installation Manager (EIM)](https://docs.espressif.com/projects/idf-im-ui/en/latest/)
-  (recommended), selecting version v5.5.5; or
+  (recommended), selecting version v6.1; or
 - a git checkout, following the
-  [ESP-IDF v5.5.5 Get Started guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/get-started/index.html):
+  [ESP-IDF v6.1 Get Started guide](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/get-started/index.html):
   ```bash
   mkdir -p ~/esp
-  git clone --recursive -b v5.5.5 https://github.com/espressif/esp-idf.git ~/esp/esp-idf
+  git clone --recursive -b v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf
   cd ~/esp/esp-idf && ./install.sh esp32s3
   ```
 
@@ -174,12 +174,12 @@ tooling: `idf.py`, CMake and Ninja.
 
 ```bash
 # EIM installation (Linux/macOS)
-source ~/.espressif/tools/activate_idf_v5.5.5.sh
+source ~/.espressif/tools/activate_idf_v6.1.sh
 
 # Or a git installation
 . ~/esp/esp-idf/export.sh
 
-# Check the active version: prints ESP-IDF v5.5.5
+# Check the active version: prints ESP-IDF v6.1
 idf.py --version
 ```
 

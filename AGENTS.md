@@ -15,11 +15,11 @@ From PowerShell, use:
 wsl.exe -d Ubuntu-24.04 --cd /home/cmossom/src/smart-grind-by-weight
 ```
 
-Firmware builds use ESP-IDF v5.5.5. Activate it in the shell first, then build
+Firmware builds use ESP-IDF v6.1. Activate it in the shell first, then build
 through the grinder tool:
 
 ```bash
-source ~/.espressif/tools/activate_idf_v5.5.5.sh   # EIM; or: . ~/esp/esp-idf/export.sh
+source ~/.espressif/tools/activate_idf_v6.1.sh   # EIM; or: . ~/esp/esp-idf/export.sh
 python3 tools/grinder.py build --hardware v1 --jobs 8
 python3 tools/grinder.py build --hardware v2 --jobs 8
 ```

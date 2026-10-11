@@ -79,6 +79,17 @@ class IdfCommandTest(unittest.TestCase):
             self.assertIsNone(tool._idf_command("v1", "build"))
 
 
+class ToolchainVersionTest(unittest.TestCase):
+    def test_ci_release_manifest_and_hint_name_one_esp_idf_version(self):
+        manifest = (ROOT / "src" / "idf_component.yml").read_text()
+        minimum = re.search(r'idf:\s*\n\s*version: ">=([\d.]+)"', manifest).group(1)
+        for workflow in ("firmware.yml", "release.yml"):
+            with self.subTest(workflow):
+                text = (ROOT / ".github" / "workflows" / workflow).read_text()
+                self.assertEqual(re.findall(r"esp_idf_version: (\S+)", text), [f"v{minimum}"])
+        self.assertIn(f"activate_idf_v{minimum}.sh", grinder.IDF_ACTIVATION_HINT)
+
+
 class BuildInfoTest(unittest.TestCase):
     def run_build_info(self, folder, environment):
         header = Path(folder) / "git_info.h"

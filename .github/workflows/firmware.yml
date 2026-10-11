@@ -59,7 +59,7 @@ jobs:
       - name: Build firmware
         uses: espressif/esp-idf-ci-action@v1
         with:
-          esp_idf_version: v5.5.5
+          esp_idf_version: v6.1
           target: esp32s3
           extra_docker_args: -e SMART_GRIND_BUILD_NUMBER=${{ github.run_number }}
           command: python3 tools/grinder.py build --hardware ${{ matrix.variant }}

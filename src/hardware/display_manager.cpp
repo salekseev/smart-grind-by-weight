@@ -109,9 +109,10 @@ bool DisplayManager::init_panel() {
         return false;
     }
 
+    // esp_lcd takes pins as gpio_num_t; the QSPI panel has no D/C line.
     esp_lcd_panel_io_spi_config_t io_config = {};
-    io_config.cs_gpio_num = HW_DISPLAY_CS_PIN;
-    io_config.dc_gpio_num = -1;
+    io_config.cs_gpio_num = static_cast<gpio_num_t>(HW_DISPLAY_CS_PIN);
+    io_config.dc_gpio_num = GPIO_NUM_NC;
     io_config.spi_mode = 0;
     io_config.pclk_hz = HW_DISPLAY_QSPI_FREQUENCY_HZ;
     io_config.trans_queue_depth = 10;
@@ -132,7 +133,7 @@ bool DisplayManager::init_panel() {
     vendor_config.flags.use_qspi_interface = 1;
 
     esp_lcd_panel_dev_config_t panel_config = {};
-    panel_config.reset_gpio_num = HW_DISPLAY_RESET_PIN;
+    panel_config.reset_gpio_num = static_cast<gpio_num_t>(HW_DISPLAY_RESET_PIN);
     panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
     panel_config.bits_per_pixel = 16;
     panel_config.vendor_config = &vendor_config;

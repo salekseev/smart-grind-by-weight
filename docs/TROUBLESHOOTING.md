@@ -206,17 +206,17 @@ for the underlying circuit and supply limits.
 **Symptom:** `python3 tools/grinder.py build` stops with
 `ESP-IDF is not set up in this shell`, or `idf.py` is not found.
 
-**Resolution:** Activate ESP-IDF v5.5.5 in the current shell, check the version
+**Resolution:** Activate ESP-IDF v6.1 in the current shell, check the version
 and rebuild. Activation lasts only for that shell.
 
 ```bash
 # EIM installation (Linux/macOS)
-source ~/.espressif/tools/activate_idf_v5.5.5.sh
+source ~/.espressif/tools/activate_idf_v6.1.sh
 
 # Or a git installation
 . ~/esp/esp-idf/export.sh
 
-# Prints ESP-IDF v5.5.5
+# Prints ESP-IDF v6.1
 idf.py --version
 ```
 

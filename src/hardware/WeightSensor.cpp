@@ -10,7 +10,7 @@
 #if DEBUG_ENABLE_LOADCELL_MOCK
 #include "mock_hx711_driver.h"
 #endif
-#include <math.h>
+#include <cmath>
 
 /*
  * WeightSensor Implementation
@@ -595,7 +595,7 @@ void WeightSensor::load_calibration() {
         float saved_factor = prefs->getFloat("hx_cal", USER_DEFAULT_CALIBRATION_FACTOR);
         
         // Check for corrupted/invalid calibration data
-        if (isnan(saved_factor) || !isfinite(saved_factor) || saved_factor == 0.0) {
+        if (std::isnan(saved_factor) || !std::isfinite(saved_factor) || saved_factor == 0.0) {
             LOG_BLE("WARNING: Invalid calibration factor detected, using default\n");
             saved_factor = USER_DEFAULT_CALIBRATION_FACTOR;
             // Clear corrupted data and save default
@@ -808,7 +808,7 @@ float WeightSensor::get_saved_calibration_factor() {
         float saved_factor = prefs->getFloat("hx_cal", USER_DEFAULT_CALIBRATION_FACTOR);
         
         // Validate saved factor
-        if (isnan(saved_factor) || !isfinite(saved_factor) || saved_factor == 0.0) {
+        if (std::isnan(saved_factor) || !std::isfinite(saved_factor) || saved_factor == 0.0) {
             return USER_DEFAULT_CALIBRATION_FACTOR;
         }
         return saved_factor;
@@ -862,7 +862,7 @@ float WeightSensor::get_current_sps() const {
 float WeightSensor::get_standard_deviation_g(uint32_t window_ms) const {
     // Get raw standard deviation and convert to grams
     float raw_std_dev = raw_filter.get_standard_deviation_raw(window_ms);
-    return raw_std_dev / abs(cal_factor);  // Convert from raw ADC units to grams (use abs since noise magnitude is always positive)
+    return raw_std_dev / std::fabs(cal_factor);  // Convert from raw ADC units to grams (use abs since noise magnitude is always positive)
 }
 
 int32_t WeightSensor::get_standard_deviation_adc(uint32_t window_ms) const {

@@ -49,8 +49,8 @@ FIRMWARE_VARIANTS = {
 }
 FIRMWARE_IMAGE = "smart-grind-by-weight.bin"
 IDF_ACTIVATION_HINT = (
-    "Activate ESP-IDF v5.5.5 in this shell first, for example "
-    "'source ~/.espressif/tools/activate_idf_v5.5.5.sh' (EIM) or "
+    "Activate ESP-IDF v6.1 in this shell first, for example "
+    "'source ~/.espressif/tools/activate_idf_v6.1.sh' (EIM) or "
     "'. ~/esp/esp-idf/export.sh'"
 )
 
@@ -630,13 +630,11 @@ class GrinderTool:
             ota_path = Path(ota_file.name)
             ota_file.close()
             try:
-                # Underscore spellings work with both esptool 4 (shipped with
-                # ESP-IDF 5.5) and esptool 5, which still accepts them.
                 read_result = self.run_command(
                     esptool + ["--chip", "esp32s3",
                      "--port", args.port, "--baud", str(args.baud),
-                     "--before", "default_reset", "--after", "hard_reset",
-                     "read_flash", "0x0000e000", "0x2000", str(ota_path)],
+                     "--before", "default-reset", "--after", "hard-reset",
+                     "read-flash", "0x0000e000", "0x2000", str(ota_path)],
                     env=flash_env,
                 )
                 if read_result.returncode != 0:
@@ -654,8 +652,8 @@ class GrinderTool:
             result = self.run_command(
                 esptool + ["--chip", "esp32s3",
                  "--port", args.port, "--baud", str(args.baud),
-                 "--before", "default_reset", "--after", "hard_reset",
-                 "write_flash", f"0x{app_offset:08x}", str(firmware_path)],
+                 "--before", "default-reset", "--after", "hard-reset",
+                 "write-flash", f"0x{app_offset:08x}", str(firmware_path)],
                 env=flash_env,
             )
             if result.returncode == 0:

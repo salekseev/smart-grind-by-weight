@@ -11,7 +11,10 @@ idf_component_register(
     REQUIRES
         # Espressif components
         app_update
-        driver
+        esp_driver_gpio
+        esp_driver_i2c
+        esp_driver_rmt
+        esp_driver_spi
         esp_driver_usb_serial_jtag
         esp_event
         esp_http_client

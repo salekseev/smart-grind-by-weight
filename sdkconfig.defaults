@@ -55,7 +55,10 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # 50 ms periods and would be quantised to 10 ms steps at the IDF default.
 #
 CONFIG_FREERTOS_HZ=1000
-CONFIG_FREERTOS_USE_TICKLESS_IDLE=n
+# FreeRTOS runs from flash, the ESP-IDF default. On the V2 board, placing it in
+# IRAM left 13-18 KB less internal heap free and bought back only 1 ms of the UI
+# task's 15 ms cycle, at the same 62 fps.
+CONFIG_FREERTOS_IN_IRAM=n
 # A debug watchpoint on the last 32 bytes of each task's stack panics at the
 # write that overflows it, as under the Arduino core, instead of the canary
 # check noticing at the next context switch. Costs up to 60 bytes of each stack.

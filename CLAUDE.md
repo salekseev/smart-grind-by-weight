@@ -2,7 +2,7 @@
 
 ESP32-S3 intelligent coffee scale with grind-by-weight functionality. Features predictive grinding system, LVGL touch UI, and BLE OTA updates. Automatically grinds coffee beans to precise target weights using flow prediction and pulse correction algorithms.
 
-The firmware is a native **ESP-IDF** application, built with ESP-IDF v5.5.5's
+The firmware is a native **ESP-IDF** application, built with ESP-IDF v6.1's
 own tooling (`idf.py`, CMake and Ninja). There is no Arduino core: the entry
 point is `app_main()` in `src/main.cpp`, and every peripheral, storage and
 network API is an ESP-IDF one.
@@ -18,10 +18,10 @@ PowerShell, enter the canonical checkout with:
 wsl.exe -d Ubuntu-24.04 --cd /home/cmossom/src/smart-grind-by-weight
 ```
 
-Building, flashing and monitoring need ESP-IDF v5.5.5 activated in the shell
-(`source ~/.espressif/tools/activate_idf_v5.5.5.sh` for an EIM install, or
+Building, flashing and monitoring need ESP-IDF v6.1 activated in the shell
+(`source ~/.espressif/tools/activate_idf_v6.1.sh` for an EIM install, or
 `. ~/esp/esp-idf/export.sh` for a git install; `idf.py --version` should print
-ESP-IDF v5.5.5). See `docs/DEVELOPMENT.md` for installation.
+ESP-IDF v6.1). See `docs/DEVELOPMENT.md` for installation.
 
 All development tasks use the unified cross-platform Python tool:
 

@@ -3,7 +3,7 @@
 DeviceWebServer::perform_github_ota is compiled unchanged against host fakes of
 esp_http_client, the inactive-partition writer and a fake millisecond clock.
 The fake esp_http_client_read follows esp_http_client.c and transport_ssl.c in
-ESP-IDF 5.5: each call keeps reading until the caller's buffer is full or the
+ESP-IDF 6.1: each call keeps reading until the caller's buffer is full or the
 body is complete, waiting up to the client's timeout_ms for every TLS read. A
 wait that times out returns the bytes gathered so far, or -ESP_ERR_HTTP_EAGAIN
 when there are none. A peer close (FIN) returns the bytes gathered so far, or
