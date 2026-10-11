@@ -15,13 +15,15 @@ class FirmwareRollbackTest(unittest.TestCase):
         settings = (ROOT / "sdkconfig.defaults").read_text().splitlines()
         self.assertIn("CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y", settings)
 
-    def test_confirmation_runs_before_the_firmware_starts(self):
-        # The Arduino core confirmed the image before setup(); a restart during
-        # startup must not count as a failed update.
-        services = function(MAIN, "void init_platform_services()")
-        self.assertIn("confirm_running_image();", services)
-        app_main = function(MAIN, 'extern "C" void app_main()')
-        self.assertLess(app_main.index("init_platform_services();"), app_main.index("setup();"))
+    def test_confirmation_runs_once_start_up_completes(self):
+        # An image that crashes or hangs before its tasks are running stays
+        # unconfirmed, so the bootloader returns to the previous one.
+        self.assertNotIn("confirm_running_image();", function(MAIN, "void init_platform_services()"))
+        setup = function(MAIN, "void setup()")
+        self.assertEqual(setup.count("confirm_running_image();"), 1)
+        for step in ("task_manager.init(", "file_io_task.init("):
+            self.assertLess(setup.index(step), setup.index("confirm_running_image();"), step)
+        self.assertTrue(setup.rstrip()[:-1].rstrip().endswith("confirm_running_image();"))
 
     def test_only_an_unconfirmed_update_is_confirmed(self):
         code = r'''

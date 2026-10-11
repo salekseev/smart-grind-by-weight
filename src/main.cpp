@@ -112,8 +112,9 @@ void init_console() {
 /**
  * Confirm the running image so the bootloader keeps it. After an update the
  * bootloader rolls back to the previous image at the next reset unless the new
- * one confirms itself; the Arduino core did this at startup, and grinders
- * updated from that firmware keep its rollback-enabled bootloader.
+ * one confirms itself, and grinders updated from the Arduino firmware keep its
+ * rollback-enabled bootloader. Called once start-up has completed, so an image
+ * that crashes or hangs before then is rolled back.
  */
 void confirm_running_image() {
     esp_ota_img_states_t state;
@@ -131,7 +132,6 @@ void confirm_running_image() {
  */
 void init_platform_services() {
     init_console();
-    confirm_running_image();
 
     esp_err_t nvs_status = nvs_flash_init();
     if (nvs_status == ESP_ERR_NVS_NO_FREE_PAGES ||
@@ -284,6 +284,7 @@ void setup() {
     file_io_task.init(task_manager.get_file_io_queue());
     
     LOG_BLE("✅ All task modules initialized\n");
+    confirm_running_image();
 }
 
 void loop() {
