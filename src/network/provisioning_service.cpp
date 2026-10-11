@@ -82,6 +82,9 @@ void ProvisioningService::update() {
     if (!active_ && (state == NetworkState::WIFI_NO_CREDENTIALS ||
                      state == NetworkState::WIFI_SETUP_REQUIRED)) {
         start();
+    } else if (active_ && state == NetworkState::WIFI_CONNECTED) {
+        // The saved network came back while the setup access point was up.
+        stop_dns();
     }
 
     if (reboot_pending_ && static_cast<int32_t>(millis() - reboot_at_ms_) >= 0) {

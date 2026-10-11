@@ -11,7 +11,9 @@ the grinder's smaller feature set.
 1. Try saved station credentials without blocking weight sampling, motor control,
    touch, or rendering.
 2. If credentials are absent or cannot connect, start a secured setup access
-   point with a generated, persisted password.
+   point with a generated, persisted password. When the saved network was only
+   out of reach, try it again once a minute while nobody is connected to the
+   setup access point, and close the access point once it connects.
 3. Show the setup SSID, password and Wi-Fi QR code on the grinder display.
 4. Serve a captive setup page and support Improv Wi-Fi provisioning over USB
    serial as an alternative.

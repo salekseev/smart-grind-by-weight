@@ -122,13 +122,24 @@ void SmartGrindNetworkManager::wifi_event_handler(void* context, esp_event_base_
         case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
             self->station_got_ip_.store(false);
-            // Retry within the current attempt; giving up, backing off and
-            // falling through to setup mode all stay in update() so the timing
-            // lives in one place.
-            if (self->state() == NetworkState::WIFI_CONNECTING) {
+            // Retry within the current attempt, or within a background attempt
+            // behind the setup access point; giving up, backing off and falling
+            // through to setup mode all stay in update() so the timing lives in
+            // one place.
+            if (self->state() == NetworkState::WIFI_CONNECTING ||
+                self->setup_attempt_active_.load()) {
                 esp_wifi_connect();
             }
             break;
+        case WIFI_EVENT_AP_STACONNECTED:
+            self->setup_clients_.fetch_add(1);
+            break;
+        case WIFI_EVENT_AP_STADISCONNECTED: {
+            int clients = self->setup_clients_.load();
+            while (clients > 0 && !self->setup_clients_.compare_exchange_weak(clients, clients - 1)) {
+            }
+            break;
+        }
         default:
             break;
     }
@@ -146,7 +157,10 @@ void SmartGrindNetworkManager::update() {
     if (!initialized_.load() || !enabled_.load()) return;
 
     if (station_got_ip_.load()) {
-        if (state() != NetworkState::WIFI_CONNECTED) handle_connected();
+        if (state() != NetworkState::WIFI_CONNECTED) {
+            if (state() == NetworkState::WIFI_SETUP_AP) close_setup_access_point();
+            handle_connected();
+        }
         return;
     }
 
@@ -174,7 +188,40 @@ void SmartGrindNetworkManager::update() {
         esp_wifi_disconnect();
     } else if (state() == NetworkState::WIFI_RETRY_WAIT && elapsed_ms >= RETRY_DELAY_MS) {
         begin_connection();
+    } else if (state() == NetworkState::WIFI_SETUP_AP) {
+        update_setup_retry();
     }
+}
+
+void SmartGrindNetworkManager::update_setup_retry() {
+    if (!has_credentials()) return;
+
+    const uint32_t now = millis();
+    if (setup_attempt_active_.load()) {
+        if (setup_clients_.load() == 0 && now - setup_attempt_at_ms_ < CONNECT_TIMEOUT_MS) return;
+        // Clear the flag before the disconnect raises DISCONNECTED, as above.
+        setup_attempt_active_.store(false);
+        esp_wifi_disconnect();
+        setup_attempt_at_ms_ = now + SETUP_RETRY_INTERVAL_MS;
+        return;
+    }
+    if (setup_clients_.load() > 0 || static_cast<int32_t>(now - setup_attempt_at_ms_) < 0) return;
+
+    setup_attempt_at_ms_ = now;
+    setup_attempt_active_.store(true);
+    if (esp_wifi_connect() != ESP_OK) {
+        setup_attempt_active_.store(false);
+        setup_attempt_at_ms_ = now + SETUP_RETRY_INTERVAL_MS;
+        return;
+    }
+    LOG_BLE("[WIFI] Trying the configured network again\n");
+}
+
+void SmartGrindNetworkManager::close_setup_access_point() {
+    setup_attempt_active_.store(false);
+    // The station keeps its connection; only the access point stops.
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    LOG_BLE("[WIFI] Configured network reached; setup access point closed\n");
 }
 
 bool SmartGrindNetworkManager::set_enabled(bool enabled) {
@@ -350,6 +397,7 @@ void SmartGrindNetworkManager::begin_connection() {
 
     stop_mdns();
     station_got_ip_.store(false);
+    setup_attempt_active_.store(false);
 
     // The interface has to be fully configured before the radio starts, so a
     // WIFI_EVENT_STA_START arriving immediately can act on the right settings.
@@ -412,6 +460,9 @@ bool SmartGrindNetworkManager::start_setup_access_point(const std::string& ssid,
     if (esp_netif_set_ip_info(access_point_netif_, &ip_info) != ESP_OK) return false;
     if (esp_netif_dhcps_start(access_point_netif_) != ESP_OK) return false;
 
+    setup_clients_.store(0);
+    setup_attempt_active_.store(false);
+    setup_attempt_at_ms_ = millis() + SETUP_RETRY_INTERVAL_MS;
     set_state(NetworkState::WIFI_SETUP_AP);
     LOG_BLE("[WIFI] Setup access point started: %s (%s)\n", ssid.c_str(),
             access_point_ip().c_str());
@@ -462,6 +513,7 @@ void SmartGrindNetworkManager::stop_mdns() {
 void SmartGrindNetworkManager::stop_network() {
     stop_mdns();
     station_got_ip_.store(false);
+    setup_attempt_active_.store(false);
     if (wifi_started_) {
         esp_wifi_disconnect();
         esp_wifi_stop();

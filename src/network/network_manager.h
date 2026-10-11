@@ -71,12 +71,19 @@ public:
 private:
     static constexpr uint32_t CONNECT_TIMEOUT_MS = 15000;
     static constexpr uint32_t RETRY_DELAY_MS = 30000;
+    // How often the saved network is tried again behind the setup access point.
+    static constexpr uint32_t SETUP_RETRY_INTERVAL_MS = 60000;
 
     Preferences* preferences_ = nullptr;
     std::atomic<NetworkState> state_{NetworkState::WIFI_DISABLED};
     std::atomic<bool> initialized_{false};
     std::atomic<bool> enabled_{false};
     std::atomic<bool> station_got_ip_{false};
+    // A background attempt on the saved network while the setup AP is up.
+    std::atomic<bool> setup_attempt_active_{false};
+    // Phones and laptops connected to the setup access point.
+    std::atomic<int> setup_clients_{0};
+    uint32_t setup_attempt_at_ms_ = 0;  // when the active attempt began, or the next one is due
     bool ever_connected_ = false;
     bool mdns_started_ = false;
     bool wifi_started_ = false;
@@ -94,6 +101,15 @@ private:
 
     void load_settings();
     void begin_connection();
+    /**
+     * Try the saved network again while the setup access point is up, in case it
+     * was only out of reach at start-up. Waits while anyone is connected to the
+     * access point: an attempt moves the radio to the router's channel and
+     * blocks the setup page's network scan.
+     */
+    void update_setup_retry();
+    /** Close the setup access point once the station has joined the network. */
+    void close_setup_access_point();
     void handle_connected();
     void stop_network();
     void set_state(NetworkState state);
