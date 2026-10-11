@@ -196,7 +196,9 @@ WebSocket command queue and controller path described above.
 The optional GaggiMate screensaver is a separate outbound local-network
 client. It consumes GaggiMate's existing `/ws` status stream and uses
 `/api/status` as a temperature-only compatibility fallback. It never sends
-control commands to the espresso machine.
+control commands to the espresso machine. The WebSocket client delivers a
+status frame larger than its 1 KB receive buffer as several data events; the
+pieces are reassembled and parsed once, and a frame over 4 KB is dropped.
 
 `GET /api/v1/status` also exposes a stable 12-character device identifier,
 model and hardware revision. The same identifier is advertised as the `id` TXT

@@ -34,6 +34,8 @@ private:
     static constexpr uint32_t HTTP_FALLBACK_INTERVAL_MS = 5000;
     // Both the client's own reconnect interval and the retry after a failed start.
     static constexpr uint32_t WEBSOCKET_RETRY_MS = 3000;
+    // A status frame larger than this is dropped rather than buffered.
+    static constexpr size_t WEBSOCKET_FRAME_MAX_BYTES = 4096;
 
     mutable SemaphoreHandle_t mutex_ = nullptr;
     TaskHandle_t task_handle_ = nullptr;
@@ -42,6 +44,8 @@ private:
     bool reconnect_requested_ = false;
     std::string host_;
     std::string connected_host_;
+    // The text frame being received, only touched on the WebSocket client's task.
+    std::string websocket_frame_;
     GaggiMateStatus status_{};
     uint32_t last_success_ms_ = 0;
     uint32_t last_http_poll_ms_ = 0;

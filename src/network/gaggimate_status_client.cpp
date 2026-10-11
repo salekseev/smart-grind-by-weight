@@ -225,6 +225,7 @@ void GaggiMateStatusClient::start_websocket(const std::string& host) {
     }
 
     connected_host_ = host;
+    websocket_frame_.clear();
     last_http_poll_ms_ = 0;
 }
 
@@ -244,14 +245,26 @@ void GaggiMateStatusClient::websocket_event_handler(void* context, esp_event_bas
     if (!self || !event) return;
 
     switch (id) {
-        case WEBSOCKET_EVENT_DATA:
-            // Only complete text frames carry a status update; GaggiMate never
-            // fragments them.
-            if (event->op_code == 0x01 && event->data_ptr && event->data_len > 0) {
-                self->apply_status_payload(
-                    std::string(event->data_ptr, static_cast<size_t>(event->data_len)), true);
+        case WEBSOCKET_EVENT_DATA: {
+            // Only text frames carry a status update. The client posts a frame
+            // larger than its receive buffer as several DATA events, so parse
+            // the payload once every piece has arrived.
+            if (event->op_code != 0x01 || !event->data_ptr || event->data_len <= 0) break;
+            std::string& frame = self->websocket_frame_;
+            if (event->payload_offset == 0) frame.clear();
+            const bool fits = event->payload_len > 0 &&
+                              static_cast<size_t>(event->payload_len) <= WEBSOCKET_FRAME_MAX_BYTES;
+            if (!fits || static_cast<size_t>(event->payload_offset) != frame.size()) {
+                frame.clear();
+                break;
+            }
+            frame.append(event->data_ptr, static_cast<size_t>(event->data_len));
+            if (frame.size() >= static_cast<size_t>(event->payload_len)) {
+                self->apply_status_payload(frame, true);
+                frame.clear();
             }
             break;
+        }
         case WEBSOCKET_EVENT_DISCONNECTED:
         case WEBSOCKET_EVENT_ERROR:
         case WEBSOCKET_EVENT_CLOSED:
