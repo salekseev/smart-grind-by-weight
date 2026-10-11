@@ -327,6 +327,12 @@ or from the project virtual environment when ESP-IDF is not active.
 
 Once the device is running and connected to Bluetooth:
 
+The delta patch is stored in the `patch` partition and applied with
+`esp_delta_ota` once the transfer completes. The rebuilt image streams through
+the same `OtaWriter` as a browser upload, so it is checked before any of it
+reaches flash: it must be Smart Grind firmware for this chip and flash mode,
+and not the build the bootloader last rolled back from.
+
 ```bash
 # Build and upload wirelessly (production)
 python3 tools/grinder.py build-upload

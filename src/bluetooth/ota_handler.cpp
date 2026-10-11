@@ -14,6 +14,7 @@
 #include "../config/logging.h"
 #include "../hardware/touch_driver.h"
 #include "../hardware/hardware_manager.h"
+#include "../network/ota_writer.h"
 #include "../tasks/task_manager.h"
 #include "../system/string_utils.h"
 #include <sdkconfig.h>
@@ -35,7 +36,7 @@ struct DeltaTarget {
     // The running image, or nullptr for a full update, whose patch was made
     // against an empty image.
     const esp_partition_t* source;
-    esp_ota_handle_t image;
+    OtaWriter* image;
 };
 
 esp_err_t read_source(uint8_t* buffer, size_t size, int offset, void* user_data) {
@@ -48,7 +49,7 @@ esp_err_t read_source(uint8_t* buffer, size_t size, int offset, void* user_data)
 }
 
 esp_err_t write_image(const uint8_t* buffer, size_t size, void* user_data) {
-    return esp_ota_write(static_cast<DeltaTarget*>(user_data)->image, buffer, size);
+    return static_cast<DeltaTarget*>(user_data)->image->write(buffer, size) ? ESP_OK : ESP_FAIL;
 }
 
 }  // namespace
@@ -423,28 +424,18 @@ bool OTAHandler::finalize_update() {
                   running_partition->label, (unsigned long)running_partition->address, 
                   (unsigned long)running_partition->size);
 
-    LOG_OTA_DEBUG("Getting next update partition...\n");
-    const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
-    if (!update_partition) {
-        LOG_BLE("❌ Could not find a valid OTA update partition!\n");
-        LOG_OTA_DEBUG("esp_ota_get_next_update_partition() FAILED\n");
-        return false;
-    }
-    LOG_OTA_DEBUG("Update partition: %s (addr=0x%lx, size=%lu)\n", 
-                  update_partition->label, (unsigned long)update_partition->address, 
-                  (unsigned long)update_partition->size);
-    
-    LOG_BLE("OTA Info: Running from '%s', updating to '%s'\n", 
-                  running_partition->label, update_partition->label);
-
     // esp_delta_ota rebuilds the new image from the running one and the stored
-    // patch, writing it to the inactive partition as it goes.
-    DeltaTarget target{is_full_update ? nullptr : running_partition, 0};
-    esp_err_t err = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &target.image);
-    if (err != ESP_OK) {
-        LOG_BLE("OTA: Could not open the inactive partition: %s\n", esp_err_to_name(err));
+    // patch. OtaWriter streams it into the inactive partition and applies the
+    // same admission check as a browser upload before any of it reaches flash.
+    OtaWriter writer;
+    if (!writer.begin(0)) {
+        LOG_BLE("OTA: Could not open the inactive partition: %s\n", writer.error());
         return false;
     }
+    LOG_BLE("OTA Info: Running from '%s', updating to '%s'\n",
+                  running_partition->label, writer.partition()->label);
+
+    DeltaTarget target{is_full_update ? nullptr : running_partition, &writer};
     esp_delta_ota_cfg_t delta_config = {};
     delta_config.user_data = &target;
     delta_config.read_cb_with_user_data = read_source;
@@ -460,16 +451,17 @@ bool OTAHandler::finalize_update() {
     applied = applied && esp_delta_ota_finalize(delta) == ESP_OK;
     if (delta) esp_delta_ota_deinit(delta);
     if (!applied) {
-        LOG_BLE("OTA: Delta patch could not be applied\n");
-        esp_ota_abort(target.image);
+        // The writer names an image it refused; a patch or flash failure has
+        // no message of its own.
+        LOG_BLE("OTA: Delta patch could not be applied%s%s\n",
+                *writer.error() ? ": " : "", writer.error());
+        writer.abort();
         return false;
     }
 
-    // esp_ota_end validates the image the patch produced.
-    err = esp_ota_end(target.image);
-    if (err == ESP_OK) err = esp_ota_set_boot_partition(update_partition);
-    if (err != ESP_OK) {
-        LOG_BLE("OTA: Patched image was not accepted: %s\n", esp_err_to_name(err));
+    // end() validates the image the patch produced and makes it bootable.
+    if (!writer.end()) {
+        LOG_BLE("OTA: Patched image was not accepted: %s\n", writer.error());
         return false;
     }
 

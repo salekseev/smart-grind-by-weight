@@ -21,6 +21,22 @@ line. Earlier release history remains available in the original project's
 - Fixed open Wi-Fi networks, which have no password, failing to save. The setup
   page and Improv provisioning both offered a blank password field, then
   reported the attempt as a storage failure and kept the grinder offline.
+- A reconnection attempt that times out now leaves the connecting state before
+  dropping the link, so the Wi-Fi driver can no longer reconnect underneath the
+  30-second back-off or the switch to setup mode.
+
+### Web interface and updates
+
+- Firmware update preparation and upload now refuse cross-origin requests,
+  like every other route that changes device state. A page on another site can
+  no longer prepare and flash firmware through a hidden form.
+- Bluetooth delta updates check the rebuilt image before any of it reaches
+  flash, as browser uploads do: it must be Smart Grind firmware and not the
+  build the bootloader last rolled back from.
+- GaggiMate status frames longer than 1 KB are reassembled and shown instead of
+  being dropped, which left the machine marked offline.
+- An unsolicited WebSocket PONG from an integration no longer desynchronises the
+  connection, which could close an otherwise healthy telemetry client.
 
 ### Display and screensaver
 

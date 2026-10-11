@@ -85,7 +85,7 @@ bool OtaWriter::end() {
         error_ = esp_err_to_name(activated);
         return false;
     }
-    LOG_BLE("[WEB OTA] Wrote %u bytes to %s\n", static_cast<unsigned>(written_),
+    LOG_BLE("[OTA] Wrote %u bytes to %s\n", static_cast<unsigned>(written_),
             partition_->label);
     return true;
 }

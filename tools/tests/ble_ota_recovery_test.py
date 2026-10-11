@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 STUBS = r'''
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <climits>
 #include <cstdio>
@@ -33,8 +34,14 @@ STUBS = r'''
 #define CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0 1
 #define CONFIG_ESP_TASK_WDT_PANIC 1
 using esp_err_t = int;
-constexpr esp_err_t ESP_OK = 0, ESP_FAIL = -1;
+constexpr esp_err_t ESP_OK = 0, ESP_FAIL = -1, ESP_ERR_OTA_VALIDATE_FAILED = 0x1503;
 constexpr int ESP_PARTITION_TYPE_DATA=1, ESP_PARTITION_SUBTYPE_DATA_SPIFFS=130;
+// The image header check OtaWriter applies before anything reaches flash.
+namespace firmware_image {
+constexpr size_t HEADER_BYTES = 288;
+const char* verdict = nullptr;
+const char* check_header(const uint8_t*) { return verdict; }
+}
 const char* esp_err_to_name(esp_err_t) { return "injected failure"; }
 struct Preferences {
     std::map<std::string, std::string> values;
@@ -159,20 +166,22 @@ void recovered(OTAHandler& ota, Preferences& prefs) {
     assert(operation_interlock().release(token));
 }
 int main() {
-    const uint8_t bytes[8]{};
+    // Long enough to carry the image header OtaWriter checks.
+    const uint8_t bytes[300]{};
+    const uint32_t size = sizeof(bytes);
     Preferences prefs;
     OTAHandler ota;
     ota.init(&prefs);
     auto other_operation = operation_interlock().try_acquire();
     assert(other_operation);
-    assert(!ota.start_ota(8,"2",true,"next"));
+    assert(!ota.start_ota(size,"2",true,"next"));
     assert(prefs.values.empty() && !task_manager.suspended);
     assert(last_watchdog.timeout_ms == 0);
     assert(operation_interlock().owns(other_operation));
     operation_interlock().release(other_operation);
     for (int scenario=0; scenario<6; ++scenario) {
         init_error = scenario==0 ? -1 : 0;
-        bool started=ota.start_ota(8,"2",true,"next");
+        bool started=ota.start_ota(size,"2",true,"next");
         if (scenario==0) { assert(!started); }
         else {
             assert(started && task_manager.suspended);
@@ -181,16 +190,16 @@ int main() {
             if (scenario==1) ota.abort_ota(); // includes disconnect path
             if (scenario==2) assert(!ota.complete_ota()); // short image
             if (scenario==3) {
-                assert(ota.process_data_chunk(bytes,8));
+                assert(ota.process_data_chunk(bytes,size));
                 end_error=-1;
                 assert(!ota.complete_ota()); // image validation fails
                 end_error=0;
                 assert(!image_open && ota_aborts==0 && boot==nullptr && delta_open==0);
             }
-            if (scenario==4) assert(!ota.process_data_chunk(bytes,9));
+            if (scenario==4) assert(!ota.process_data_chunk(bytes,size+1));
             if (scenario==5) {
                 write_error=-1;
-                assert(!ota.process_data_chunk(bytes,8));
+                assert(!ota.process_data_chunk(bytes,size));
                 write_error=0;
             }
         }
@@ -201,6 +210,7 @@ int main() {
     }
     assert(!ota.start_ota(0));
     assert(!ota.start_ota(UINT32_MAX));
+    assert(ota.start_ota(8)); ota.abort_ota(); // A tiny patch is accepted; the image it yields is judged at the end.
     const int before=init_calls;
     for(uint32_t size:{8193U,0x7ffff000U,0x7fffffffU,UINT32_MAX})
         assert(!ota.start_ota(size,"2",true,"next"));
@@ -209,10 +219,10 @@ int main() {
     assert(init_calls==before && prefs.values.empty() && !task_manager.suspended);
     assert(ota.start_ota(8192));ota.abort_ota();
     watchdog_error=-1;
-    assert(!ota.start_ota(8,"2",true,"next"));
+    assert(!ota.start_ota(size,"2",true,"next"));
     recovered(ota,prefs);
     watchdog_error=0;
-    assert(ota.start_ota(8,"2",true,"next"));
+    assert(ota.start_ota(size,"2",true,"next"));
     watchdog_error=-1;
     bool restarted=false;
     try { ota.abort_ota(); } catch (const Restart&) { restarted=true; }
@@ -234,6 +244,17 @@ int main() {
         recovered(ota,prefs);
     }
     delta_failure=DELTA_OK;
+
+    // The image a patch produces goes through the same admission check as a
+    // browser upload: foreign firmware, or the build the bootloader rolled
+    // back from, is discarded and never made bootable.
+    firmware_image::verdict="Not Smart Grind firmware"; ota_aborts=0;
+    assert(ota.start_ota(patch.size(),"2",false,""));
+    assert(ota.process_data_chunk(patch.data(),patch.size()));
+    assert(!ota.complete_ota());
+    assert(!image_open && ota_aborts==1 && boot==nullptr && delta_open==0);
+    recovered(ota,prefs);
+    firmware_image::verdict=nullptr;
 
     // A delta update rebuilds the image from the running one and exactly the
     // stored patch, then boots it; a full update reads an empty source.
@@ -264,7 +285,9 @@ class OtaRecoveryTest(unittest.TestCase):
     def test_production_failure_paths(self):
         compiler = shutil.which("g++")
         self.assertIsNotNone(compiler, "g++ is required for OTA fault-injection tests")
-        source = (STUBS + without_includes(ROOT / "src/bluetooth/ota_handler.h")
+        source = (STUBS + without_includes(ROOT / "src/network/ota_writer.h")
+                  + "\n" + without_includes(ROOT / "src/network/ota_writer.cpp")
+                  + "\n" + without_includes(ROOT / "src/bluetooth/ota_handler.h")
                   + "\n" + without_includes(ROOT / "src/bluetooth/ota_handler.cpp")
                   + "\n" + CASES)
         with tempfile.TemporaryDirectory(prefix="smart-grind-ota-test-") as folder:

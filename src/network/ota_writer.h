@@ -12,8 +12,9 @@
 // WEB OTA IMAGE WRITER
 //==============================================================================
 // Streams a firmware image into the inactive app partition and marks it bootable
-// once it validates. Used by the browser upload; the GitHub release download
-// goes through esp_https_ota, and the BLE path applies a delta patch instead.
+// once it validates. The browser upload streams its file through it, and the
+// BLE path streams the image a delta patch produces; the GitHub release
+// download goes through esp_https_ota, which checks the same description.
 
 class OtaWriter {
 public:
@@ -44,6 +45,9 @@ public:
 
     /** True when the last failure refused the image itself rather than flash. */
     bool image_refused() const { return image_refused_; }
+
+    /** The partition being written, once begin() has succeeded. */
+    const esp_partition_t* partition() const { return partition_; }
 
 private:
     bool fail(const char* reason);
