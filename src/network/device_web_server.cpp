@@ -3,6 +3,7 @@
 #include <esp_crt_bundle.h>
 #include <esp_err.h>
 #include <esp_http_client.h>
+#include <esp_https_ota.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
@@ -30,6 +31,7 @@
 #include "../system/string_utils.h"
 #include "../system/timing.h"
 #include "device_api.h"
+#include "firmware_image.h"
 #include "http_multipart.h"
 #include "http_support.h"
 #include "network_manager.h"
@@ -67,8 +69,9 @@ constexpr size_t OTA_DOWNLOAD_TASK_STACK = 12U * 1024U;
 constexpr uint32_t UPDATE_CHECK_INTERVAL_MS = 30U * 60U * 1000U;
 constexpr uint32_t UPDATE_CHECK_RETRY_MS = 5U * 60U * 1000U;
 constexpr size_t UPDATE_CHECK_TASK_STACK = 10U * 1024U;
-constexpr size_t OTA_DOWNLOAD_BUFFER = 4096;
-// esp_http_client_read waits this long for body data before failing.
+// esp_https_ota reads the release image this many bytes at a time.
+constexpr int OTA_DOWNLOAD_BUFFER = 1024;
+// A release read waits this long for body data before the download fails.
 constexpr int OTA_READ_TIMEOUT_MS = 15000;
 // Release requests follow at most this many redirects.
 constexpr int HTTP_MAX_REDIRECTS = 3;
@@ -153,58 +156,59 @@ bool json_bool_value(const std::string& json, const char* key, bool& value) {
     return false;
 }
 
-/**
- * Send the request and read the response headers, following redirects as
- * esp_https_ota does: unlike esp_http_client_perform, the open/read API hands a
- * redirect back to the caller.
- *
- * @return false when the request could not be sent or redirected; otherwise
- *         `status` and `content_length` describe the final response.
- */
-bool open_response(esp_http_client_handle_t client, int& status, int64_t& content_length) {
-    for (int redirects = 0;; ++redirects) {
-        if (esp_http_client_open(client, 0) != ESP_OK) return false;
-        content_length = esp_http_client_fetch_headers(client);
-        status = esp_http_client_get_status_code(client);
-        const bool redirect = status == 301 || status == 302 || status == 303 ||
-                              status == 307 || status == 308;
-        if (!redirect || redirects == HTTP_MAX_REDIRECTS) return true;
-        // Discard the redirect body so the connection can carry the next
-        // request; a redirect to another host reconnects instead.
-        if (esp_http_client_flush_response(client, nullptr) != ESP_OK ||
-            esp_http_client_set_redirection(client) != ESP_OK) {
-            return false;
-        }
+/** A response body esp_http_client_perform delivers in pieces, up to a limit. */
+struct TextResponse {
+    explicit TextResponse(size_t limit) : max_bytes(limit) {}
+    size_t max_bytes;
+    std::string body;
+    bool too_large = false;
+};
+
+esp_err_t collect_text(esp_http_client_event_t* event) {
+    auto* response = static_cast<TextResponse*>(event->user_data);
+    // A redirect's own body arrives here too; keep only the final response's.
+    if (event->event_id != HTTP_EVENT_ON_DATA ||
+        esp_http_client_get_status_code(event->client) != 200) {
+        return ESP_OK;
     }
+    if (response->body.size() + static_cast<size_t>(event->data_len) > response->max_bytes) {
+        response->too_large = true;
+    } else {
+        response->body.append(static_cast<const char*>(event->data), event->data_len);
+    }
+    return ESP_OK;
 }
 
-/** Fetch a URL over TLS into `body`, refusing responses above `max_bytes`. */
+/**
+ * Fetch a URL over TLS into `body`, following redirects, and refusing an empty
+ * response or one above `max_bytes`.
+ */
 bool fetch_text(const char* url, const char* user_agent, int timeout_ms, size_t max_bytes,
                 std::string& body) {
+    TextResponse response(max_bytes);
     esp_http_client_config_t config = {};
     config.url = url;
     config.timeout_ms = timeout_ms;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.user_agent = user_agent;
+    config.max_redirection_count = HTTP_MAX_REDIRECTS;
+    config.event_handler = collect_text;
+    config.user_data = &response;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) return false;
-
-    bool success = false;
     esp_http_client_set_header(client, "Cache-Control", "no-cache");
-    int status = 0;
-    int64_t length = 0;
-    if (open_response(client, status, length) && status == 200 && length > 0 &&
-        static_cast<size_t>(length) <= max_bytes) {
-        body.assign(static_cast<size_t>(length), '\0');
-        const int read = esp_http_client_read_response(client, body.data(), length);
-        if (read == length) {
-            success = true;
-        }
-    }
-    esp_http_client_close(client);
+    const bool success = esp_http_client_perform(client) == ESP_OK &&
+                         esp_http_client_get_status_code(client) == 200 &&
+                         !response.too_large && !response.body.empty();
     esp_http_client_cleanup(client);
+    if (success) body = std::move(response.body);
     return success;
+}
+
+/** The release mirror's CDN must not answer an update from a stale cache. */
+esp_err_t prepare_release_request(esp_http_client_handle_t client) {
+    return esp_http_client_set_header(client, "Cache-Control", "no-cache");
 }
 }  // namespace
 
@@ -722,98 +726,68 @@ void DeviceWebServer::perform_github_ota(const std::string& tag) {
         hardware_manager_->get_grinder()->stop();
     }
 
-    esp_http_client_config_t config = {};
-    config.url = url.c_str();
-    config.timeout_ms = OTA_READ_TIMEOUT_MS;
-    config.crt_bundle_attach = esp_crt_bundle_attach;
-    config.user_agent = "SmartGrind-OTA/1";
-    config.buffer_size = 1024;
+    esp_http_client_config_t http_config = {};
+    http_config.url = url.c_str();
+    http_config.timeout_ms = OTA_READ_TIMEOUT_MS;
+    http_config.crt_bundle_attach = esp_crt_bundle_attach;
+    http_config.user_agent = "SmartGrind-OTA/1";
+    http_config.buffer_size = OTA_DOWNLOAD_BUFFER;
+    http_config.max_redirection_count = HTTP_MAX_REDIRECTS;
+    http_config.keep_alive_enable = true;
+    esp_https_ota_config_t ota_config = {};
+    ota_config.http_config = &http_config;
+    ota_config.http_client_init_cb = prepare_release_request;
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        LOG_BLE("[WEB OTA] Could not initialise release-mirror connection\n");
-        finish_ota(false);
-        return;
-    }
-
-    esp_http_client_set_header(client, "Cache-Control", "no-cache");
-    int status = 0;
-    int64_t content_length = 0;
-    if (!open_response(client, status, content_length)) {
-        LOG_BLE("[WEB OTA] Could not open release-mirror connection\n");
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        finish_ota(false);
-        return;
-    }
-    if (status != 200) {
-        LOG_BLE("[WEB OTA] Release download failed: HTTP %d, epoch %lld, heap %u, largest %u\n",
-                status, static_cast<long long>(time(nullptr)),
+    // esp_https_ota follows redirects, checks the image's chip, revision and
+    // flash mode, erases the inactive partition as the image arrives, and
+    // validates the image before making it the boot partition.
+    esp_https_ota_handle_t download = nullptr;
+    esp_err_t err = esp_https_ota_begin(&ota_config, &download);
+    if (err != ESP_OK) {
+        LOG_BLE("[WEB OTA] Release download failed: %s, epoch %lld, heap %u, largest %u\n",
+                esp_err_to_name(err), static_cast<long long>(time(nullptr)),
                 static_cast<unsigned int>(device_info::free_internal_heap_bytes()),
                 static_cast<unsigned int>(device_info::largest_free_internal_block_bytes()));
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
         finish_ota(false);
         return;
     }
 
+    // Decide on the image before esp_https_ota_perform() erases any flash.
+    esp_app_desc_t description;
+    const char* refusal = esp_https_ota_get_img_desc(download, &description) == ESP_OK
+                              ? firmware_image::check_description(description)
+                              : "Not a valid ESP32 firmware image";
+    const int image_size = esp_https_ota_get_image_size(download);
     const esp_partition_t* target = esp_ota_get_next_update_partition(nullptr);
-    if (!target || content_length <= 0 || static_cast<size_t>(content_length) > target->size) {
-        LOG_BLE("[WEB OTA] Invalid image size: %lld\n", static_cast<long long>(content_length));
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
+    if (!refusal && (image_size <= 0 || !target || static_cast<size_t>(image_size) > target->size)) {
+        refusal = "Invalid image size";
+    }
+    if (refusal) {
+        LOG_BLE("[WEB OTA] Release image refused: %s\n", refusal);
+        esp_https_ota_abort(download);
         finish_ota(false);
         return;
     }
 
-    std::vector<uint8_t> buffer(OTA_DOWNLOAD_BUFFER);
-    bool started = false;
-    bool failed = false;
-    ota_total_.store(static_cast<size_t>(content_length));
+    ota_total_.store(static_cast<size_t>(image_size));
     ota_received_.store(0);
+    do {
+        err = esp_https_ota_perform(download);
+        const int read = esp_https_ota_get_image_len_read(download);
+        ota_received_.store(read > 0 ? static_cast<size_t>(read) : 0);
+    } while (err == ESP_ERR_HTTPS_OTA_IN_PROGRESS);
 
-    while (ota_received_.load() < ota_total_.load()) {
-        // A read fails once OTA_READ_TIMEOUT_MS passes without data or the peer
-        // closes; it returns 0 only after the whole body has arrived.
-        const int read = esp_http_client_read(client, reinterpret_cast<char*>(buffer.data()),
-                                             buffer.size());
-        if (read <= 0) {
-            failed = true;
-            break;
-        }
-        if (!started) {
-            // An ESP32 application image always begins with the 0xE9 magic byte.
-            if (buffer[0] != 0xE9) {
-                LOG_BLE("[WEB OTA] Download is not an ESP32 application image\n");
-                failed = true;
-                break;
-            }
-            if (!web_firmware_update.begin(static_cast<size_t>(content_length))) {
-                LOG_BLE("[WEB OTA] Could not open inactive partition: %s\n",
-                        web_firmware_update.error());
-                failed = true;
-                break;
-            }
-            started = true;
-        }
-        if (!web_firmware_update.write(buffer.data(), static_cast<size_t>(read))) {
-            LOG_BLE("[WEB OTA] Flash write failed: %s\n", web_firmware_update.error());
-            failed = true;
-            break;
-        }
-        ota_received_.fetch_add(static_cast<size_t>(read));
-    }
-
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-
-    const bool complete = !failed && ota_received_.load() == ota_total_.load();
-    const bool valid = complete && started && web_firmware_update.end();
-    if (!valid) {
-        web_firmware_update.abort();
-        LOG_BLE("[WEB OTA] Download incomplete or invalid (%lu/%lu): %s\n",
+    if (err != ESP_OK || !esp_https_ota_is_complete_data_received(download)) {
+        LOG_BLE("[WEB OTA] Download incomplete (%lu/%lu): %s\n",
                 static_cast<unsigned long>(ota_received_.load()),
-                static_cast<unsigned long>(ota_total_.load()), web_firmware_update.error());
+                static_cast<unsigned long>(ota_total_.load()), esp_err_to_name(err));
+        esp_https_ota_abort(download);
+        finish_ota(false);
+        return;
+    }
+    err = esp_https_ota_finish(download);
+    if (err != ESP_OK) {
+        LOG_BLE("[WEB OTA] Release image failed validation: %s\n", esp_err_to_name(err));
         finish_ota(false);
         return;
     }

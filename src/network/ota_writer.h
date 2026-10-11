@@ -12,9 +12,8 @@
 // WEB OTA IMAGE WRITER
 //==============================================================================
 // Streams a firmware image into the inactive app partition and marks it bootable
-// once it validates. Used by both the browser upload and the GitHub release
-// download; the BLE path writes a delta patch instead and goes through
-// components/delta.
+// once it validates. Used by the browser upload; the GitHub release download
+// goes through esp_https_ota, and the BLE path applies a delta patch instead.
 
 class OtaWriter {
 public:
