@@ -1,9 +1,17 @@
 # The firmware sources form the project's application component, which the root
 # CMakeLists.txt registers. Third-party dependencies are declared in
 # idf_component.yml.
-file(GLOB_RECURSE app_sources
-     "${CMAKE_CURRENT_LIST_DIR}/*.c"
-     "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+# CONFIGURE_DEPENDS re-runs the glob when a source file is added or removed,
+# so an existing build directory does not need a manual reconfigure. ESP-IDF
+# first evaluates this file in script mode to collect requirements, where that
+# option is not allowed; the source list is unused in that pass.
+if(CMAKE_BUILD_EARLY_EXPANSION)
+    set(app_sources "")
+else()
+    file(GLOB_RECURSE app_sources CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_LIST_DIR}/*.c"
+         "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+endif()
 
 idf_component_register(
     SRCS ${app_sources}

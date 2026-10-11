@@ -20,9 +20,6 @@
  * Maintains backward compatibility with existing HX711-based code.
  */
 
-// General ADC timing constants
-#define TARE_TIMEOUT_MS 2000           // Tare operation timeout
-
 namespace {
 constexpr int32_t kAdcMaximumRaw = 0xFFFFFF;
 constexpr int32_t kAdcSaturationMargin = 0x00FFFF;

@@ -63,7 +63,8 @@ private:
     UIManager* ui_manager;
     
     // Task monitoring
-    TaskMetrics task_metrics[5]; // One for each task
+    static constexpr int TASK_COUNT = 5;
+    TaskMetrics task_metrics[TASK_COUNT]; // One for each task
     bool tasks_initialized;
     bool ota_suspended;
     
