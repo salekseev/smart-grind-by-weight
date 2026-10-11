@@ -16,8 +16,6 @@ void suppress_touch_i2c_logs() {
         return;
     }
     esp_log_level_set("i2c.master", ESP_LOG_NONE);
-    esp_log_level_set("esp32-hal-i2c-ng", ESP_LOG_NONE);
-    esp_log_level_set("Wire", ESP_LOG_NONE);
     configured = true;
 #endif
 }

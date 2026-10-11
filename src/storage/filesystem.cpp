@@ -51,7 +51,6 @@ FsFile::FsFile(FsFile&& other) noexcept
       writable_(other.writable_),
       dir_(other.dir_),
       path_(std::move(other.path_)),
-      mount_path_(std::move(other.mount_path_)),
       name_(std::move(other.name_)) {
     other.file_ = nullptr;
     other.dir_ = nullptr;
@@ -64,7 +63,6 @@ FsFile& FsFile::operator=(FsFile&& other) noexcept {
         writable_ = other.writable_;
         dir_ = other.dir_;
         path_ = std::move(other.path_);
-        mount_path_ = std::move(other.mount_path_);
         name_ = std::move(other.name_);
         other.file_ = nullptr;
         other.dir_ = nullptr;
@@ -83,11 +81,9 @@ void FsFile::close() {
     }
 }
 
-FsFile FsFile::open_entry(const std::string& mount_path,
-                          const std::string& logical_path,
-                          const char* mode) {
+FsFile FsFile::open_entry(const std::string& logical_path, const char* mode) {
     FsFile handle;
-    const std::string vfs_path = join_mount(mount_path, logical_path);
+    const std::string vfs_path = join_mount(kMountPath, logical_path);
 
     struct stat info = {};
     const bool exists = stat(vfs_path.c_str(), &info) == 0;
@@ -105,7 +101,6 @@ FsFile FsFile::open_entry(const std::string& mount_path,
     }
 
     handle.path_ = logical_path;
-    handle.mount_path_ = mount_path;
     handle.name_ = base_name(logical_path);
     return handle;
 }
@@ -186,7 +181,7 @@ FsFile FsFile::openNextFile() {
         std::string child = path_;
         if (child.empty() || child.back() != '/') child += '/';
         child += entry->d_name;
-        return open_entry(mount_path_, child, "r");
+        return open_entry(child, "r");
     }
     return handle;
 }
@@ -230,7 +225,7 @@ std::string Filesystem::to_vfs_path(const char* path) const {
 
 FsFile Filesystem::open(const char* path, const char* mode) {
     if (!mounted_ || !path) return FsFile();
-    return FsFile::open_entry(kMountPath, path, mode);
+    return FsFile::open_entry(path, mode);
 }
 
 bool Filesystem::exists(const char* path) {

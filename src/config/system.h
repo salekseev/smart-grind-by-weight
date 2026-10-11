@@ -22,7 +22,7 @@
 //------------------------------------------------------------------------------
 // FREERTOS TASK CONFIGURATION
 //------------------------------------------------------------------------------
-// Critical timing for FreeRTOS task architecture with 6 specialized tasks
+// Critical timing for FreeRTOS task architecture with 5 specialized tasks
 
 // Task Intervals (milliseconds)
 #define SYS_TASK_WEIGHT_SAMPLING_INTERVAL_MS 20                                // Weight sampling poll interval (50Hz poll; HX711 @10SPS) - Core 0
@@ -46,13 +46,6 @@
 // Raise BLE above UI to prevent starvation during transfers
 #define SYS_TASK_PRIORITY_BLUETOOTH 3                                          // Higher priority (BLE operations)
 #define SYS_TASK_PRIORITY_FILE_IO 1                                            // Low priority (file operations)
-
-// Inter-Task Communication Queue Sizes
-#define SYS_QUEUE_UI_TO_GRIND_SIZE 5                                           // UI events to grind controller
-#define SYS_QUEUE_FILE_IO_SIZE 20                                              // File I/O operation requests
-
-// Legacy task scheduler intervals (deprecated - kept for compatibility)
-#define SYS_TASK_LOADCELL_INTERVAL_MS 20                                       // Load cell polling frequency (50Hz)
 
 
 //------------------------------------------------------------------------------

@@ -1,9 +1,5 @@
 #pragma once
 
-// Forward declaration to avoid circular dependency
-class BluetoothManager;
-extern BluetoothManager g_bluetooth_manager;
-
 #include <stdio.h>
 
 // Diagnostics are written to the console with plain printf. On device the

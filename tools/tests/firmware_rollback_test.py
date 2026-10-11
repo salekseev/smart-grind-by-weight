@@ -21,8 +21,7 @@ class FirmwareRollbackTest(unittest.TestCase):
         self.assertNotIn("confirm_running_image();", function(MAIN, "void init_platform_services()"))
         setup = function(MAIN, "void setup()")
         self.assertEqual(setup.count("confirm_running_image();"), 1)
-        for step in ("task_manager.init(", "file_io_task.init("):
-            self.assertLess(setup.index(step), setup.index("confirm_running_image();"), step)
+        self.assertLess(setup.index("task_manager.init("), setup.index("confirm_running_image();"))
         self.assertTrue(setup.rstrip()[:-1].rstrip().endswith("confirm_running_image();"))
 
     def test_only_an_unconfirmed_update_is_confirmed(self):

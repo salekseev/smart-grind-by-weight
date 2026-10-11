@@ -43,11 +43,8 @@ struct FakeFilesystem {
 
 class FileIOTask {
 public:
-    bool filesystem_available = true;
-    int maintenance_runs = 0;
     void check_filesystem_health();
     bool validate_filesystem_access();
-    void perform_filesystem_maintenance() { ++maintenance_runs; }
     void handle_filesystem_error();
     bool attempt_filesystem_recovery();
 };
@@ -61,9 +58,9 @@ public:
 int main() {
     FileIOTask task;
 
-    // A mounted filesystem is checked without writing to flash.
+    // A mounted filesystem is checked without writing to flash or remounting.
     for (int check = 0; check < 3; ++check) task.check_filesystem_health();
-    assert(task.filesystem_available && task.maintenance_runs == 3);
+    assert(filesystem.mounted);
     assert(filesystem.opens == 0 && filesystem.removes == 0 && filesystem.begins == 0);
 
     // Lost mount: every check retries a non-formatting mount until it works,
@@ -71,11 +68,11 @@ int main() {
     filesystem.mounted = false;
     filesystem.mount_failures = 2;
     task.check_filesystem_health();
-    assert(!task.filesystem_available && filesystem.begins == 1);
+    assert(!filesystem.mounted && filesystem.begins == 1);
     task.check_filesystem_health();
-    assert(!task.filesystem_available && filesystem.begins == 2);
+    assert(!filesystem.mounted && filesystem.begins == 2);
     task.check_filesystem_health();
-    assert(task.filesystem_available && filesystem.begins == 3);
+    assert(filesystem.mounted && filesystem.begins == 3);
     assert(filesystem.formatting_begins == 0 && filesystem.ends == 0);
     assert(filesystem.opens == 0 && filesystem.removes == 0);
 }

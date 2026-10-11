@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/queue.h>
 #include "../config/constants.h"
 
 // Forward declarations
@@ -21,12 +20,6 @@ struct TaskHandles {
     TaskHandle_t ui_render_task;
     TaskHandle_t bluetooth_task;
     TaskHandle_t file_io_task;
-};
-
-// Inter-task communication queues
-struct TaskQueues {
-    QueueHandle_t ui_to_grind_queue;        // UI events → Grind Controller
-    QueueHandle_t file_io_queue;            // Any task → File I/O
 };
 
 // Task timing metrics for monitoring
@@ -47,23 +40,20 @@ struct TaskMetrics {
  * 
  * Responsibilities:
  * - Create and manage all FreeRTOS tasks
- * - Setup inter-task communication queues
  * - Monitor task health and performance
  * - Handle task suspend/resume for OTA operations
  * - Provide task-based heartbeat reporting
- * 
+ *
  * Architecture:
  * - 5 specialized FreeRTOS tasks with core pinning
  * - Predictable timing using vTaskDelayUntil
- * - Thread-safe inter-task communication via queues
  * - Performance monitoring per task
  */
 class TaskManager {
 private:
-    // Task handles and queues
+    // Task handles
     TaskHandles task_handles;
-    TaskQueues task_queues;
-    
+
     // Hardware and system references
     HardwareManager* hardware_manager;
     StateMachine* state_machine;
@@ -93,11 +83,7 @@ public:
     void suspend_hardware_tasks();  // For OTA operations
     void resume_hardware_tasks();   // After OTA operations
     void delete_all_tasks();
-    
-    // Queue access
-    QueueHandle_t get_ui_to_grind_queue() const { return task_queues.ui_to_grind_queue; }
-    QueueHandle_t get_file_io_queue() const { return task_queues.file_io_queue; }
-    
+
     // Task monitoring
     bool are_tasks_healthy() const;
     void print_task_status() const;
@@ -116,11 +102,7 @@ private:
     bool create_ui_render_task();
     bool create_bluetooth_task();
     bool create_file_io_task();
-    
-    // Queue creation
-    bool create_inter_task_queues();
-    void cleanup_queues();
-    
+
     // Task implementation methods
     void weight_sampling_task_impl();
     void grind_control_task_impl();

@@ -21,7 +21,6 @@
  */
 
 // General ADC timing constants
-#define SIGNAL_TIMEOUT 100             // Signal timeout in ms
 #define TARE_TIMEOUT_MS 2000           // Tare operation timeout
 
 namespace {
@@ -260,7 +259,7 @@ void WeightSensor::tare() {
         update();
 
         // Use load cell update interval from constants.h
-        vTaskDelay(pdMS_TO_TICKS(SYS_TASK_LOADCELL_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(SYS_TASK_WEIGHT_SAMPLING_INTERVAL_MS));
     }
 
     if (doTare) {
@@ -274,7 +273,7 @@ void WeightSensor::tare() {
         unsigned long sample_start = millis();
         while (raw_filter.get_sample_count() == 0 && millis() - sample_start < 1000) {
             update();
-            vTaskDelay(pdMS_TO_TICKS(SYS_TASK_LOADCELL_INTERVAL_MS));
+            vTaskDelay(pdMS_TO_TICKS(SYS_TASK_WEIGHT_SAMPLING_INTERVAL_MS));
         }
     }
 
@@ -401,7 +400,7 @@ float WeightSensor::get_settled_weight(uint32_t window_ms, float* settle_time_ou
         }
         
         // Use load cell update interval from constants.h
-        vTaskDelay(pdMS_TO_TICKS(SYS_TASK_LOADCELL_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(SYS_TASK_WEIGHT_SAMPLING_INTERVAL_MS));
     }
     
     // Timeout occurred - return best available measurement

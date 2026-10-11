@@ -26,7 +26,6 @@
 #include "system/state_machine.h"
 #include "system/statistics_manager.h"
 #include "system/timing.h"
-#include "tasks/file_io_task.h"
 #include "tasks/grind_control_task.h"
 #include "tasks/task_manager.h"
 #include "tasks/weight_sampling_task.h"
@@ -37,8 +36,7 @@ StateMachine state_machine;
 ProfileController profile_controller;
 GrindController grind_controller;
 UIManager ui_manager;
-BluetoothManager g_bluetooth_manager;
-BluetoothManager& bluetooth_manager = g_bluetooth_manager;
+BluetoothManager bluetooth_manager;
 
 #if SYS_ENABLE_REALTIME_HEARTBEAT
 // Core 1 timing metrics (global scope for main loop access)
@@ -260,9 +258,9 @@ void setup() {
     // Initialize individual task modules BEFORE TaskManager creates FreeRTOS tasks
     // This ensures all task dependencies are ready before tasks start running
     LOG_BLE("[STARTUP] Initializing task module dependencies...\n");
-    weight_sampling_task.init(hardware_manager.get_load_cell(), &grind_logger);
-    grind_control_task.init(&grind_controller, hardware_manager.get_load_cell(), 
-                           hardware_manager.get_grinder(), &grind_logger);
+    weight_sampling_task.init(hardware_manager.get_load_cell());
+    grind_control_task.init(&grind_controller, hardware_manager.get_load_cell(),
+                           hardware_manager.get_grinder());
     
     LOG_BLE("✅ Task module dependencies initialized\n");
     
@@ -279,11 +277,6 @@ void setup() {
     }
     
     LOG_BLE("✅ TaskManager initialized successfully\n");
-    
-    // Initialize remaining task modules that depend on TaskManager queues
-    file_io_task.init(task_manager.get_file_io_queue());
-    
-    LOG_BLE("✅ All task modules initialized\n");
     confirm_running_image();
 }
 

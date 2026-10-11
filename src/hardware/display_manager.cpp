@@ -7,7 +7,6 @@
 #include <esp_heap_caps.h>
 
 #include <algorithm>
-#include <cstring>
 
 #include "touch_wake_policy.h"
 #include "../config/constants.h"

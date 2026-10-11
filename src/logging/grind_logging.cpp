@@ -12,7 +12,6 @@
 #include "../storage/filesystem.h"
 #include <time.h>
 #include <esp_heap_caps.h>
-#include <esp_log.h>
 #include "../hardware/WeightSensor.h"
 #include "../hardware/grinder.h"
 #include "../config/constants.h"

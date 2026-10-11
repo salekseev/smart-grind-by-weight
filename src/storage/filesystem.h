@@ -46,7 +46,6 @@ public:
     size_t readBytes(char* buffer, size_t length);
     size_t write(const uint8_t* buffer, size_t length);
 
-    int print(const char* text);
     int println(const char* text = "");
     int printf(const char* format, ...) __attribute__((format(printf, 2, 3)));
 
@@ -67,15 +66,15 @@ private:
     friend class Filesystem;
 
     /** Open a single entry; `mode` follows fopen(). */
-    static FsFile open_entry(const std::string& mount_path,
-                             const std::string& logical_path,
-                             const char* mode);
+    static FsFile open_entry(const std::string& logical_path, const char* mode);
+
+    /** Write `text` without a line ending; println()'s building block. */
+    int print(const char* text);
 
     FILE* file_ = nullptr;
     bool writable_ = false;  // only a write handle needs flushing before stat
     void* dir_ = nullptr;  // DIR*, kept opaque so callers need no dirent.h
     std::string path_;     // partition-absolute
-    std::string mount_path_;
     std::string name_;
 };
 

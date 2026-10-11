@@ -16,7 +16,6 @@
 #include "../storage/filesystem.h"
 #include <nvs_flash.h>
 #include <nvs.h>
-#include "../system/performance_monitor.h"
 #include "../system/screensaver_settings.h"
 #include "../system/statistics_manager.h"
 #include "../system/diagnostics_controller.h"
