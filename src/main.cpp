@@ -110,10 +110,6 @@ void init_console() {
 }
 
 /**
- * Bring up the settings partition and the shared event loop that the
- * Wi-Fi, BLE and HTTP services all attach to.
- */
-/**
  * Confirm the running image so the bootloader keeps it. After an update the
  * bootloader rolls back to the previous image at the next reset unless the new
  * one confirms itself; the Arduino core did this at startup, and grinders
@@ -129,6 +125,10 @@ void confirm_running_image() {
     LOG_BLE("[STARTUP] Confirmed updated firmware: %s\n", esp_err_to_name(err));
 }
 
+/**
+ * Bring up the settings partition and the shared event loop that the
+ * Wi-Fi, BLE and HTTP services all attach to.
+ */
 void init_platform_services() {
     init_console();
     confirm_running_image();
@@ -154,28 +154,40 @@ void init_platform_services() {
     }
 }
 
+/**
+ * Name of a reset reason for the startup log. The switch has no default, so
+ * -Wswitch fails the build when ESP-IDF adds a reason this list lacks.
+ */
+const char* reset_reason_name(esp_reset_reason_t reason) {
+    switch (reason) {
+        case ESP_RST_UNKNOWN: return "UNKNOWN";
+        case ESP_RST_POWERON: return "POWERON";
+        case ESP_RST_EXT: return "EXT (Reset Pin)";
+        case ESP_RST_SW: return "SW (esp_restart)";
+        case ESP_RST_PANIC: return "PANIC (Exception)";
+        case ESP_RST_INT_WDT: return "INT_WDT";
+        case ESP_RST_TASK_WDT: return "TASK_WDT";
+        case ESP_RST_WDT: return "WDT";
+        case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT: return "BROWNOUT";
+        case ESP_RST_SDIO: return "SDIO";
+        case ESP_RST_USB: return "USB (Serial/JTAG port)";
+        case ESP_RST_JTAG: return "JTAG";
+        case ESP_RST_EFUSE: return "EFUSE";
+        case ESP_RST_PWR_GLITCH: return "POWER_GLITCH";
+        case ESP_RST_CPU_LOCKUP: return "CPU_LOCKUP";
+    }
+    return "UNKNOWN";
+}
+
 void setup() {
 #ifdef UI_DEBUG_SERIAL_DELAY_MS
     vTaskDelay(pdMS_TO_TICKS(UI_DEBUG_SERIAL_DELAY_MS));
 #endif
     
     // Log reset reason to help diagnose unexpected resets/freeze scenarios
-    esp_reset_reason_t rr = esp_reset_reason();
-    const char* rr_str = "UNKNOWN";
-    switch (rr) {
-        case ESP_RST_POWERON: rr_str = "POWERON"; break;
-        case ESP_RST_EXT: rr_str = "EXT (Reset Pin)"; break;
-        case ESP_RST_SW: rr_str = "SW (esp_restart)"; break;
-        case ESP_RST_PANIC: rr_str = "PANIC (Exception)"; break;
-        case ESP_RST_INT_WDT: rr_str = "INT_WDT"; break;
-        case ESP_RST_TASK_WDT: rr_str = "TASK_WDT"; break;
-        case ESP_RST_WDT: rr_str = "WDT"; break;
-        case ESP_RST_DEEPSLEEP: rr_str = "DEEPSLEEP"; break;
-        case ESP_RST_BROWNOUT: rr_str = "BROWNOUT"; break;
-        case ESP_RST_SDIO: rr_str = "SDIO"; break;
-        default: break;
-    }
-    LOG_BLE("[STARTUP] Reset reason: %s (%d)\n", rr_str, rr);
+    const esp_reset_reason_t reset_reason = esp_reset_reason();
+    LOG_BLE("[STARTUP] Reset reason: %s (%d)\n", reset_reason_name(reset_reason), reset_reason);
     
     
     // Early startup heartbeat - helps capture initialization sequence
