@@ -162,7 +162,8 @@ void SmartGrindNetworkManager::update() {
 
     const uint32_t elapsed_ms = millis() - state_changed_at_ms_;
     if (state() == NetworkState::WIFI_CONNECTING && elapsed_ms >= CONNECT_TIMEOUT_MS) {
-        esp_wifi_disconnect();
+        // Leave WIFI_CONNECTING before the disconnect raises DISCONNECTED: the
+        // event handler, on the other core, reconnects only within an attempt.
         if (ever_connected_) {
             LOG_BLE("[WIFI] Reconnection timed out; retrying in %lus\n", RETRY_DELAY_MS / 1000);
             set_state(NetworkState::WIFI_RETRY_WAIT);
@@ -170,6 +171,7 @@ void SmartGrindNetworkManager::update() {
             LOG_BLE("[WIFI] Configured network unavailable; starting setup mode\n");
             set_state(NetworkState::WIFI_SETUP_REQUIRED);
         }
+        esp_wifi_disconnect();
     } else if (state() == NetworkState::WIFI_RETRY_WAIT && elapsed_ms >= RETRY_DELAY_MS) {
         begin_connection();
     }

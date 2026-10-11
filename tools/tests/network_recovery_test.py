@@ -35,8 +35,13 @@ esp_err_t esp_wifi_init(const wifi_init_config_t*) {
 }
 enum wifi_storage_t { WIFI_STORAGE_RAM };
 esp_err_t esp_wifi_set_storage(wifi_storage_t) { return ESP_OK; }
-int disconnects = 0;
-esp_err_t esp_wifi_disconnect() { ++disconnects; return ESP_OK; }
+int disconnects = 0, connects = 0;
+esp_err_t esp_wifi_connect() { ++connects; return ESP_OK; }
+// Defined after the class: the driver's DISCONNECTED event is delivered to
+// the production handler from inside the disconnect call, as the event task
+// on the other core can do before the caller runs its next statement.
+esp_err_t esp_wifi_disconnect();
+constexpr int32_t WIFI_EVENT_STA_START = 2, WIFI_EVENT_STA_DISCONNECTED = 5;
 using esp_event_base_t = const char*;
 using esp_event_handler_t = void (*)(void*, esp_event_base_t, int32_t, void*);
 using esp_event_handler_instance_t = void*;
@@ -92,11 +97,19 @@ public:
     }
     bool ensure_wifi_initialized();
     void update();
-    static void wifi_event_handler(void*, esp_event_base_t, int32_t, void*) {}
+    static void wifi_event_handler(void* context, esp_event_base_t base, int32_t id, void* data);
     static void ip_event_handler(void*, esp_event_base_t, int32_t, void*) {}
 };
+SmartGrindNetworkManager* radio_owner = nullptr;
+esp_err_t esp_wifi_disconnect() {
+    ++disconnects;
+    SmartGrindNetworkManager::wifi_event_handler(radio_owner, WIFI_EVENT,
+                                                 WIFI_EVENT_STA_DISCONNECTED, nullptr);
+    return ESP_OK;
+}
 ''' + function(SOURCE, "bool SmartGrindNetworkManager::ensure_wifi_initialized()") \
-    + function(SOURCE, "void SmartGrindNetworkManager::update()") + r'''
+    + function(SOURCE, "void SmartGrindNetworkManager::update()") \
+    + function(SOURCE, "void SmartGrindNetworkManager::wifi_event_handler(") + r'''
 
 void connected(SmartGrindNetworkManager& wifi) {
     wifi.station_got_ip_ = true; wifi.update();
@@ -107,6 +120,7 @@ int main() {
     // A dropped connection reconnects on the next service-loop pass instead of
     // waiting out the retry delay.
     SmartGrindNetworkManager wifi;
+    radio_owner = &wifi;
     connected(wifi);
     wifi.station_got_ip_ = false; wifi.update();
     assert(wifi.connection_attempts == 1 && wifi.mdns_stops == 1);
@@ -123,9 +137,16 @@ int main() {
     assert(wifi.connection_attempts == 3 && wifi.state() == NetworkState::WIFI_CONNECTING);
 
     // A reconnection that times out backs off rather than retrying at once.
+    // The DISCONNECTED event the disconnect raises must find the new state,
+    // not WIFI_CONNECTING, or the handler reconnects underneath the back-off.
     now_ms += SmartGrindNetworkManager::CONNECT_TIMEOUT_MS; wifi.update();
-    assert(disconnects == 1 && wifi.state() == NetworkState::WIFI_RETRY_WAIT);
+    assert(disconnects == 1 && connects == 0 && wifi.state() == NetworkState::WIFI_RETRY_WAIT);
     assert(wifi.connection_attempts == 3);
+
+    // While an attempt is in progress, a drop is retried within the attempt.
+    wifi.set_state(NetworkState::WIFI_CONNECTING);
+    SmartGrindNetworkManager::wifi_event_handler(&wifi, WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, nullptr);
+    assert(connects == 1 && wifi.state() == NetworkState::WIFI_CONNECTING);
 
     // Driver setup retries the step that failed and repeats none that worked.
     SmartGrindNetworkManager fresh;
