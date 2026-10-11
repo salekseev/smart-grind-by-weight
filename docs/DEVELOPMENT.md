@@ -359,6 +359,23 @@ python3 tools/grinder.py info
 `build-upload` builds first, so run it with ESP-IDF activated. The Bluetooth
 commands themselves run from the project virtual environment.
 
+When a client connects, the grinder asks for 251-byte link-layer packets (LE
+Data Length Extension) and, if the client chose a connection interval slower
+than 30 ms, for 15-30 ms. The client may decline either request. The log
+records what was agreed, which helps when a transfer is slow or the link
+drops:
+
+```
+BLE: Link connected - interval 30.00 ms, latency 0, timeout 5000 ms, MTU 23
+BLE: MTU 517 agreed
+BLE: Link updated - interval 15.00 ms, latency 0, timeout 4000 ms, MTU 517
+```
+
+Data export sends each session file in chunks of at most the agreed MTU less
+3 bytes, the most one notification can carry. A chunk the Bluetooth stack has
+no buffer for is sent again before the next one is read; the export gives up
+after about 5 seconds of full buffers.
+
 ---
 
 ## 📦 Release Process

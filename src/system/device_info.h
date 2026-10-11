@@ -48,12 +48,4 @@ uint64_t efuse_mac();
 /** Current CPU frequency in MHz. */
 uint32_t cpu_frequency_mhz();
 
-/**
- * Switch the CPU frequency, mirroring the reduced-clock window the BLE OTA
- * handler uses to keep flash writes stable.
- *
- * @return true when the requested frequency was applied.
- */
-bool set_cpu_frequency_mhz(uint32_t mhz);
-
 }  // namespace device_info

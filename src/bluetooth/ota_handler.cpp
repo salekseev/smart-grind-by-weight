@@ -9,7 +9,6 @@
 #include <freertos/task.h>
 #include <esp_delta_ota.h>
 #include <esp_system.h>
-#include "../system/device_info.h"
 #include "../config/build_info.h"
 #include "../config/logging.h"
 #include "../hardware/touch_driver.h"
@@ -60,16 +59,13 @@ OTAHandler::OTAHandler()
     , received_size(0)
     , current_status(BLE_OTA_IDLE)
     , current_firmware_build_number("")
-    , is_full_update(false)
-    , power_state(NORMAL_POWER)
-    , normal_cpu_freq_mhz(BLE_NORMAL_CPU_FREQ_MHZ) {
+    , is_full_update(false) {
 }
 
 OTAHandler::~OTAHandler() {
     if (ota_in_progress) {
         abort_ota();
     }
-    restore_normal_power_mode();
 }
 
 void OTAHandler::init(Preferences* prefs) {
@@ -78,70 +74,6 @@ void OTAHandler::init(Preferences* prefs) {
     
     // Get current firmware build number
     current_firmware_build_number = std::to_string(BUILD_NUMBER);
-    
-    // Log initial power state
-    LOG_BLE("OTA Power: Initial state - CPU: %luMHz, Power mode: %s\n",
-                 (unsigned long)device_info::cpu_frequency_mhz(),
-                 (power_state == NORMAL_POWER) ? "NORMAL" : "REDUCED");
-}
-
-void OTAHandler::enable_ble_power_mode() {
-    reduce_power_for_ble();
-}
-
-void OTAHandler::restore_normal_power_mode() {
-    restore_normal_power();
-}
-
-void OTAHandler::reduce_power_for_ble() {
-    if (power_state == BLE_REDUCED_POWER) return;
-    
-    // Store current CPU frequency
-    normal_cpu_freq_mhz = device_info::cpu_frequency_mhz();
-    
-    LOG_BLE("OTA Power: Switching from %luMHz to %dMHz\n", 
-                 (unsigned long)normal_cpu_freq_mhz, BLE_REDUCED_CPU_FREQ_MHZ);
-    
-    // Lower CPU frequency for power savings
-    if (!device_info::set_cpu_frequency_mhz(BLE_REDUCED_CPU_FREQ_MHZ)) {
-        LOG_BLE("OTA Power: WARNING - Failed to reduce CPU frequency\n");
-    }
-    
-    // Verify the frequency change
-    uint32_t actual_freq = device_info::cpu_frequency_mhz();
-    if (actual_freq != BLE_REDUCED_CPU_FREQ_MHZ) {
-        LOG_BLE("OTA Power: WARNING - CPU frequency is %luMHz, expected %dMHz\n", 
-                     (unsigned long)actual_freq, BLE_REDUCED_CPU_FREQ_MHZ);
-    }
-    
-    power_state = BLE_REDUCED_POWER;
-    LOG_BLE("OTA Power: Reduced power mode enabled\n");
-}
-
-void OTAHandler::restore_normal_power() {
-    if (power_state == NORMAL_POWER) return;
-    
-    LOG_BLE("OTA Power: Restoring CPU to %luMHz\n", 
-                 (unsigned long)normal_cpu_freq_mhz);
-    
-    // Restore original CPU frequency
-    if (!device_info::set_cpu_frequency_mhz(normal_cpu_freq_mhz)) {
-        LOG_BLE("OTA Power: WARNING - Failed to restore CPU frequency\n");
-        // Try to set to default frequency as fallback
-        if (!device_info::set_cpu_frequency_mhz(BLE_NORMAL_CPU_FREQ_MHZ)) {
-            LOG_BLE("OTA Power: ERROR - Failed to set fallback CPU frequency\n");
-        }
-    }
-    
-    // Verify the frequency change
-    uint32_t actual_freq = device_info::cpu_frequency_mhz();
-    if (actual_freq != normal_cpu_freq_mhz) {
-        LOG_BLE("OTA Power: WARNING - CPU frequency is %luMHz, expected %luMHz\n", 
-                     (unsigned long)actual_freq, (unsigned long)normal_cpu_freq_mhz);
-    }
-    
-    power_state = NORMAL_POWER;
-    LOG_BLE("OTA Power: Normal power mode restored\n");
 }
 
 bool OTAHandler::start_ota(uint32_t size, const std::string& expected_build_number,

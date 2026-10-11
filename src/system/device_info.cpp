@@ -51,16 +51,4 @@ uint32_t cpu_frequency_mhz() {
     return config.freq_mhz;
 }
 
-bool set_cpu_frequency_mhz(uint32_t mhz) {
-    if (mhz == cpu_frequency_mhz()) return true;
-
-    rtc_cpu_freq_config_t config = {};
-    if (!rtc_clk_cpu_freq_mhz_to_config(mhz, &config)) return false;
-
-    // The fast variant keeps the ROM's microsecond delay calibration in step,
-    // which the HX711 bit-banging driver depends on.
-    rtc_clk_cpu_freq_set_config_fast(&config);
-    return cpu_frequency_mhz() == mhz;
-}
-
 }  // namespace device_info

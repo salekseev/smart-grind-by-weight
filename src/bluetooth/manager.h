@@ -6,7 +6,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <mutex>
 #include <string>
 
@@ -19,9 +18,6 @@
 
 // Forward declaration to avoid circular dependency
 class UIManager;
-
-// Callback interface for UI status updates
-using UIStatusCallback = std::function<void(const char*)>;
 
 // Small message used to marshal BLE UI status updates to the UI task
 struct UIStatusMessage {
@@ -107,6 +103,7 @@ private:
     
     // Connection state
     bool device_connected;
+    uint16_t conn_handle;  // the connected client's handle, BLE_HS_CONN_HANDLE_NONE when idle
     bool ble_enabled;
     bool debug_stream_active;
     unsigned long enable_time;
@@ -123,13 +120,15 @@ private:
     BLEDataStatus data_status;
     uint16_t current_chunk;
     unsigned long next_chunk_time;
+    // A chunk read from the session file but not yet accepted by the stack.
+    // It is sent again, unchanged, until a notification buffer is free.
+    uint8_t pending_chunk[BLE_DATA_CHUNK_SIZE_BYTES];
+    size_t pending_chunk_size;
+    uint16_t notify_retries;
     uint32_t current_file_session_id;  // For per-file streaming
     bool sessions_info_dirty;
     uint32_t last_session_storage_version;
     bool last_reported_export_state;
-    
-    // UI status callback
-    UIStatusCallback ui_status_callback;
     
     // Queue to marshal UI status messages to UI task context
     QueueHandle_t ui_status_queue;
@@ -165,6 +164,9 @@ private:
     void clear_measurement_data();
     void send_file_list();
     void send_individual_file(uint32_t session_id);
+    size_t data_chunk_capacity() const;
+    void tune_link(NimBLEServer* server, const NimBLEConnInfo& conn_info);
+    void log_link(const char* event, const NimBLEConnInfo& conn_info);
     void update_system_info();
     void update_performance_info();
     void update_hardware_info();
@@ -256,11 +258,6 @@ public:
     void log(const char* format, ...);
     
     /**
-     * Set UI status callback
-     */
-    void set_ui_status_callback(UIStatusCallback callback);
-    
-    /**
      * Update all system information characteristics
      */
     void refresh_system_info();
@@ -274,8 +271,10 @@ public:
     // NimBLE callbacks
     void onConnect(NimBLEServer* server, NimBLEConnInfo& conn_info) override;
     void onDisconnect(NimBLEServer* server, NimBLEConnInfo& conn_info, int reason) override;
+    void onMTUChange(uint16_t mtu, NimBLEConnInfo& conn_info) override;
+    void onConnParamsUpdate(NimBLEConnInfo& conn_info) override;
+    void onPhyUpdate(NimBLEConnInfo& conn_info, uint8_t tx_phy, uint8_t rx_phy) override;
     void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& conn_info) override;
-    void onRead(NimBLECharacteristic* characteristic, NimBLEConnInfo& conn_info) override;
 
     // Drain a status message queued from BLE task; called by UI task
     bool dequeue_ui_status(char* out, size_t out_len);

@@ -244,13 +244,6 @@ void setup() {
         }
     }
     
-    // Set up UI status callback to avoid circular dependency
-    bluetooth_manager.set_ui_status_callback([](const char* status) {
-        if (auto* ota = ui_manager.get_ota_data_export_controller()) {
-            ota->update_status(status);
-        }
-    });
-    
     // Enable BLE by default during bootup with 2-minute timeout
     // (Previously disabled by default for security, now enabled for user convenience)
     bluetooth_manager.enable_during_bootup();

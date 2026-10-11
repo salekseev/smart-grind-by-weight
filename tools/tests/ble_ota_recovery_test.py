@@ -28,8 +28,6 @@ STUBS = r'''
 #define LOG_OTA_DEBUG(...) ((void)0)
 #define BUILD_NUMBER 1
 #define BUILD_FIRMWARE_VERSION "test"
-#define BLE_NORMAL_CPU_FREQ_MHZ 240
-#define BLE_REDUCED_CPU_FREQ_MHZ 80
 #define CONFIG_ESP_TASK_WDT_TIMEOUT_S 5
 #define CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0 1
 #define CONFIG_ESP_TASK_WDT_PANIC 1
@@ -67,7 +65,6 @@ typedef uint32_t TickType_t;
 #define pdMS_TO_TICKS(ms) ((TickType_t)((TickType_t)(ms) * configTICK_RATE_HZ / 1000U))
 void vTaskDelay(TickType_t) {}
 uint32_t device_info::cpu_frequency_mhz() { return 240; }
-bool device_info::set_cpu_frequency_mhz(uint32_t) { return true; }
 struct Touch { bool disabled=false; void disable(){disabled=true;} void enable(){disabled=false;} } touch;
 struct Display { Touch* get_touch_driver(){return &touch;} } display;
 struct HardwareManager { Display* get_display(){return &display;} } hardware_manager;

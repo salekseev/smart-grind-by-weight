@@ -159,6 +159,10 @@ class GrinderBLETool:
         self.status_updated = asyncio.Event()
         self.data_chunks = []
         self.session_count = 0
+        # The session-count reply is two bytes, like the EXPORTING status, and
+        # its low byte can equal any status value. It is only read as a count
+        # while one has been asked for.
+        self.awaiting_session_count = False
         self.receiving_data = False
         self.debug_buffer = ""
         self.last_debug_flush = time.time()
@@ -340,6 +344,12 @@ class GrinderBLETool:
     
     async def on_data_status(self, _: BleakGATTCharacteristic, data: bytearray):
         if not data: return
+        if self.awaiting_session_count and len(data) == 2:
+            self.awaiting_session_count = False
+            self.session_count = data[0] | (data[1] << 8)
+            self.safe_print(f"[INFO] Grinder has {self.session_count} sessions stored.")
+            return
+
         status = data[0]
         self.current_data_status = status
         
@@ -356,9 +366,6 @@ class GrinderBLETool:
         elif status == BLE_DATA_ERROR:
             self.receiving_data = False
             self.safe_print("\n[ERROR] Grinder reported an error during export.")
-        elif len(data) == 2:
-            self.session_count = data[0] | (data[1] << 8)
-            self.safe_print(f"[INFO] Grinder has {self.session_count} sessions stored.")
     
     async def wait_for_ota_status(self, expected_status: int, timeout: int = 30) -> bool:
         start_time = time.time()
@@ -584,8 +591,10 @@ class GrinderBLETool:
 
     # === Data Export Functions (Refactored) ===
     async def get_session_count(self) -> int:
+        self.awaiting_session_count = True
         await self.client.write_gatt_char(BLE_DATA_CONTROL_CHAR_UUID, bytes([BLE_DATA_CMD_GET_COUNT]))
         await asyncio.sleep(1)
+        self.awaiting_session_count = False
         return self.session_count
     
     async def export_data(self, db_path: str = None) -> bool:
