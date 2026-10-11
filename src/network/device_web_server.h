@@ -77,7 +77,12 @@ private:
     ProfileController* profile_controller_ = nullptr;
 
     void configure_routes();
-    /** True while a grind, a BLE transfer or another update (or its reboot) is pending. */
+    /**
+     * Why the device cannot take an update or transfer right now, as the text
+     * a route answers 409 with, or nullptr when it can. The one admission rule
+     * every route and the preparation state machine share.
+     */
+    const char* busy_reason() const;
     bool device_busy() const;
     /** True when enough internal RAM is free to flash an image. */
     bool internal_heap_ok() const;

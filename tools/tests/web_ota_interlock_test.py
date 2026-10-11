@@ -29,6 +29,7 @@ class WebOtaInterlockTest(unittest.TestCase):
             "bool DeviceWebServer::request_ota_preparation()",
             "bool DeviceWebServer::is_ota_ready() const",
             "bool DeviceWebServer::device_busy() const",
+            "const char* DeviceWebServer::busy_reason() const",
             "bool DeviceWebServer::internal_heap_ok() const",
             "void DeviceWebServer::recover_from_ota_failure()",
             "void DeviceWebServer::finish_ota(",
@@ -209,6 +210,10 @@ bool eventually(const std::function<bool()>& done) {
 }
 int main() {
     DeviceWebServer web; setup(web);
+    // One rule says why the device cannot take an update; every route uses it.
+    assert(!web.busy_reason() && !web.device_busy());
+    controller.active=true; assert(web.busy_reason() && web.device_busy()); controller.active=false;
+    bluetooth.transferring=true; assert(web.busy_reason()); bluetooth.transferring=false;
     sensor.fresh=false;
     assert(!controller.start_grind(18,0,GrindMode::WEIGHT)); assert_available();
     sensor.fresh=true;

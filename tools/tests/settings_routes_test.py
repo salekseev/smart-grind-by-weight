@@ -18,6 +18,7 @@ class SettingsRoutesTest(unittest.TestCase):
             "std::string json_escape(",
             "esp_err_t send_json(",
             "esp_err_t send_error(",
+            "Handler same_origin(",
         ))
         code = r'''
 #include <cassert>
@@ -56,12 +57,12 @@ bool route(httpd_handle_t server,const char* uri,httpd_method_t method,Handler h
 esp_err_t send(httpd_req_t* r,int status,const char* type,const std::string& body){
  assert(!r->status);r->status=status;r->type=type;r->body=body;return ESP_OK;  // One response per request.
 }
+bool origin_allowed(httpd_req_t* r){return r->origin;}
 ''' + helpers + r'''
 bool query_param(httpd_req_t* r,const char* key,std::string& value){
  if(!r->query.count(key)) return false;
  value=r->query.at(key);return true;
 }
-bool origin_allowed(httpd_req_t* r){return r->origin;}
 }
 struct DeviceApi {
  httpd_handle_t server_ = nullptr;

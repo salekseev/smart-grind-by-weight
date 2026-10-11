@@ -584,21 +584,15 @@ void DeviceApi::configure_settings_routes() {
                  static_cast<unsigned long>(id), status);
         return http::send_json(request, strcmp(status, "unknown") == 0 ? 404 : 200, body);
     });
-    http::route(server_, "/api/v1/profile", HTTP_POST, [this](httpd_req_t* request) {
-        if (!http::origin_allowed(request)) {
-            return http::send_error(request, 403, "Request origin is not allowed");
-        }
+    http::route(server_, "/api/v1/profile", HTTP_POST, http::same_origin([this](httpd_req_t* request) {
         return queue_profile_selection(request);
-    });
+    }));
     http::route(server_, "/api/v1/settings", HTTP_GET, [this](httpd_req_t* request) {
         return http::send_json(request, 200, settings_json());
     });
-    http::route(server_, "/api/v1/settings", HTTP_POST, [this](httpd_req_t* request) {
-        if (!http::origin_allowed(request)) {
-            return http::send_error(request, 403, "Request origin is not allowed");
-        }
+    http::route(server_, "/api/v1/settings", HTTP_POST, http::same_origin([this](httpd_req_t* request) {
         return queue_settings_update(request);
-    });
+    }));
 }
 
 esp_err_t DeviceApi::queue_profile_selection(httpd_req_t* request) {

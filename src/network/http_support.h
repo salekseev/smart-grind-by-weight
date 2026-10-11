@@ -106,6 +106,14 @@ std::string header(httpd_req_t* request, const char* name);
  */
 bool origin_allowed(httpd_req_t* request);
 
+/**
+ * Wrap the handler of a route that changes device state: a cross-origin
+ * request is answered 403 before the handler runs. Form and multipart POSTs
+ * need no CORS preflight, so an unwrapped route could be submitted by a page on
+ * another site that the user happens to have open.
+ */
+Handler same_origin(Handler handler);
+
 /** Escape a value for embedding in a JSON string literal. */
 std::string json_escape(const std::string& value);
 

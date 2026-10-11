@@ -438,10 +438,16 @@ void DeviceWebServer::recover_from_ota_failure() {
     }
 }
 
-bool DeviceWebServer::device_busy() const {
-    return is_ota_active() || !grind_controller_ || grind_controller_->is_active() ||
-           (bluetooth_manager_ && bluetooth_manager_->is_transfer_active());
+const char* DeviceWebServer::busy_reason() const {
+    if (is_ota_active()) return "A firmware update is already active";
+    if (!grind_controller_ || grind_controller_->is_active()) return "Stop the grinder first";
+    if (bluetooth_manager_ && bluetooth_manager_->is_transfer_active()) {
+        return "Wait for the Bluetooth transfer to finish";
+    }
+    return nullptr;
 }
+
+bool DeviceWebServer::device_busy() const { return busy_reason() != nullptr; }
 
 bool DeviceWebServer::internal_heap_ok() const {
     return device_info::free_internal_heap_bytes() >= OTA_MIN_INTERNAL_HEAP;
@@ -601,15 +607,12 @@ void DeviceWebServer::configure_routes() {
                                http::has_query_param(request, "download"));
     });
 
-    http::route(server_, "/api/v1/screensaver/image", HTTP_POST, [this](httpd_req_t* request) {
+    http::route(server_, "/api/v1/screensaver/image", HTTP_POST, http::same_origin([this](httpd_req_t* request) {
         return handle_screensaver_upload(request);
-    });
+    }));
 
     http::route(server_, "/api/v1/screensaver/image", HTTP_GET, [this](httpd_req_t* request) {
-        if ((grind_controller_ && grind_controller_->is_active()) || ota_active_.load() ||
-            (bluetooth_manager_ && bluetooth_manager_->is_transfer_active())) {
-            return http::send_error(request, 409, "Screensaver image is busy");
-        }
+        if (const char* reason = busy_reason()) return http::send_error(request, 409, reason);
         if (!filesystem.exists(BLE_IMAGE_FILENAME)) {
             return http::send_error(request, 404, "No custom screensaver is stored");
         }
@@ -617,27 +620,17 @@ void DeviceWebServer::configure_routes() {
                                "application/vnd.smartgrind.rgb565", false);
     });
 
-    http::route(server_, "/api/v1/screensaver/image", HTTP_DELETE, [this](httpd_req_t* request) {
-        if (!http::origin_allowed(request)) {
-            return http::send_error(request, 403, "Request origin is not allowed");
-        }
-        if (!bluetooth_manager_ || ota_active_.load() ||
-            (grind_controller_ && grind_controller_->is_active()) ||
-            bluetooth_manager_->is_transfer_active()) {
-            return http::send_error(request, 409, "Screensaver image is busy");
-        }
-        const bool deleted = bluetooth_manager_->delete_screensaver_image();
+    http::route(server_, "/api/v1/screensaver/image", HTTP_DELETE, http::same_origin([this](httpd_req_t* request) {
+        if (const char* reason = busy_reason()) return http::send_error(request, 409, reason);
+        const bool deleted = bluetooth_manager_ && bluetooth_manager_->delete_screensaver_image();
         if (deleted) device_api.mark_settings_dirty();
         return deleted ? http::send_json(request, 200, "{\"deleted\":true}")
                        : http::send_error(request, 500, "Could not delete screensaver");
-    });
+    }));
 
     // The checks below only choose the response. request_ota_preparation() and
     // is_ota_ready() re-check under ota_mutex_, which is not held across sends.
-    http::route(server_, "/api/v1/ota/prepare", HTTP_POST, [this](httpd_req_t* request) {
-        if (is_ota_active()) {
-            return http::send_error(request, 409, "A firmware update is already active");
-        }
+    http::route(server_, "/api/v1/ota/prepare", HTTP_POST, http::same_origin([this](httpd_req_t* request) {
         const OtaPreparationState preparation = ota_preparation_state_.load();
         if (preparation == OtaPreparationState::READY) {
             return is_ota_ready()
@@ -647,26 +640,18 @@ void DeviceWebServer::configure_routes() {
         if (preparation == OtaPreparationState::REQUESTED) {
             return http::send_json(request, 202, "{\"preparing\":true}");
         }
+        if (const char* reason = busy_reason()) return http::send_error(request, 409, reason);
         if (firmware_update_check_active_.load()) {
             return http::send_error(request, 409,
                                     "Wait for the firmware update check to finish");
-        }
-        if (!grind_controller_ || grind_controller_->is_active()) {
-            return http::send_error(request, 409, "Stop the grinder before updating firmware");
-        }
-        if (bluetooth_manager_ && bluetooth_manager_->is_transfer_active()) {
-            return http::send_error(request, 409, "Wait for the Bluetooth transfer to finish");
         }
         if (!request_ota_preparation()) {
             return http::send_error(request, 409, "Another operation is using the grinder");
         }
         return http::send_json(request, 202, "{\"preparing\":true}");
-    });
+    }));
 
-    http::route(server_, "/api/v1/ota/github", HTTP_POST, [this](httpd_req_t* request) {
-        if (!http::origin_allowed(request)) {
-            return http::send_error(request, 403, "Request origin is not allowed");
-        }
+    http::route(server_, "/api/v1/ota/github", HTTP_POST, http::same_origin([this](httpd_req_t* request) {
         std::string form;
         std::string tag;
         if (!http::read_body(request, form, 256) || !http::form_field(form, "tag", tag)) {
@@ -679,11 +664,11 @@ void DeviceWebServer::configure_routes() {
             return http::send_error(request, 409, "Prepare the update before installing");
         }
         return http::send_json(request, 202, "{\"accepted\":true}");
-    });
+    }));
 
-    http::route(server_, "/api/v1/ota", HTTP_POST, [this](httpd_req_t* request) {
+    http::route(server_, "/api/v1/ota", HTTP_POST, http::same_origin([this](httpd_req_t* request) {
         return handle_ota_upload(request);
-    });
+    }));
 }
 
 bool DeviceWebServer::claim_prepared_update() {
@@ -804,14 +789,8 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
                           "Prepare the firmware update before uploading");
     }
 
-    if (!grind_controller_ || grind_controller_->is_active()) {
-        finish_ota(false);
-        return http::send(request, 409, "text/plain", "Stop the grinder before updating firmware");
-    }
-    if (bluetooth_manager_ && bluetooth_manager_->is_transfer_active()) {
-        finish_ota(false);
-        return http::send(request, 409, "text/plain", "Wait for the Bluetooth transfer to finish");
-    }
+    // The claim has just applied busy_reason() under the lock, and holding the
+    // operation interlock keeps a grind from starting. Only memory can change.
     if (!internal_heap_ok()) {
         finish_ota(false);
         return http::send(request, 503, "text/plain",
@@ -903,15 +882,8 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
 }
 
 esp_err_t DeviceWebServer::handle_screensaver_upload(httpd_req_t* request) {
-    if (!http::origin_allowed(request)) {
-        return http::send_error(request, 403, "Request origin is not allowed");
-    }
-    if (!bluetooth_manager_ || ota_active_.load() ||
-        (grind_controller_ && grind_controller_->is_active()) ||
-        bluetooth_manager_->is_transfer_active()) {
-        return http::send_error(request, 409,
-                                "Stop the grinder and other transfers before uploading");
-    }
+    if (const char* reason = busy_reason()) return http::send_error(request, 409, reason);
+    if (!bluetooth_manager_) return http::send_error(request, 500, "Screensaver upload failed");
 
     MultipartReader reader;
     if (!reader.begin(http::header(request, "Content-Type"))) {

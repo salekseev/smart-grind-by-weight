@@ -303,6 +303,14 @@ bool origin_allowed(httpd_req_t* request) {
     return origin == "http://" + header(request, "Host");
 }
 
+Handler same_origin(Handler handler) {
+    return [handler = std::move(handler)](httpd_req_t* request) {
+        if (!origin_allowed(request)) {
+            return send_error(request, 403, "Request origin is not allowed");
+        }
+        return handler(request);
+    };
+}
 
 std::string json_escape(const std::string& value) {
     std::string escaped;

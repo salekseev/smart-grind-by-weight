@@ -183,7 +183,13 @@ original precision; completed graphs are replaced with the full recorded trace.
 - `GET`, `POST` and `DELETE /api/v1/screensaver/image`: read, transactionally
   replace or remove the fixed-size RGB565 custom image while idle.
 
-Settings and screensaver mutations enforce same-origin checks. Local API and
+Every route that changes device state (settings, profile, screensaver,
+firmware update preparation, release install and upload) is registered through
+`http::same_origin`, which answers a cross-origin request 403 before the
+handler runs; native clients without an `Origin` header remain supported. Form
+and multipart POSTs need no CORS preflight, so an unwrapped route could be
+submitted by a page on another site. Routes that refuse work while the device
+is busy share one `busy_reason()` and answer 409 with its text. Local API and
 motor commands are currently unauthenticated, so the grinder should be kept on
 a trusted home network. Web OTA is
 deliberately unauthenticated at this stage; browser confirmation plus the
