@@ -156,20 +156,23 @@ unsigned restarts=0;
 void esp_restart() { ++restarts; }
 struct esp_partition_t { size_t size=1000000; } partition;
 const esp_partition_t* esp_ota_get_next_update_partition(void*) { return &partition; }
-// Mirrors OtaWriter: a failed write discards the open image itself and abort()
-// of a closed writer is a no-op.
+// Mirrors OtaWriter: a failed write discards the open image itself, a refused
+// header is reported as such, and abort() of a closed writer is a no-op.
 struct OtaWriter {
-    bool fail_begin=false, fail_write=false, valid=true, opened=false;
+    bool fail_begin=false, fail_write=false, refuse_header=false, valid=true, opened=false;
+    bool refused=false;
     unsigned begins=0; size_t written=0;
-    bool begin(size_t) { assert(!opened); ++begins; written=0; opened=!fail_begin; return opened; }
+    bool begin(size_t) { assert(!opened); ++begins; written=0; refused=false; opened=!fail_begin; return opened; }
     bool write(const uint8_t* data, size_t length) {
         assert(opened && length && (written || data[0]==0xE9));
+        if (refuse_header) { opened=false; refused=true; return false; }
         if (fail_write) { opened=false; return false; }
         written+=length; return true;
     }
     bool end() { assert(opened); opened=false; return valid; }
     void abort() { opened=false; }
-    const char* error() const { return "injected"; }
+    bool image_refused() const { return refused; }
+    const char* error() const { return refused ? "Not Smart Grind firmware" : "injected"; }
 } web_firmware_update;
 bool task_fails=false;
 unsigned github_tasks=0;
@@ -291,7 +294,8 @@ int main() {
     assert(!web_firmware_update.opened && !web.is_ota_active()); assert_available();
     // Failed writer begin/write/validation, a non-image, a file that is not a
     // .bin and a non-multipart upload each give the answer the Arduino firmware
-    // gave, clean up and permit retry.
+    // gave, clean up and permit retry. An image whose header the writer refuses
+    // is answered with the writer's reason.
     const struct { int status; const char* message; } expected[]={
         {500,"Could not open the inactive firmware partition"},
         {500,"Firmware write failed"},
@@ -299,21 +303,24 @@ int main() {
         {400,"Not a valid ESP32 firmware image"},
         {400,"Not a valid ESP32 firmware image"},
         {400,"Expected a multipart/form-data firmware upload"},
+        {400,"Not Smart Grind firmware"},
     };
-    for (unsigned failure=0; failure<6; ++failure) {
+    for (unsigned failure=0; failure<7; ++failure) {
         ready(web); httpd_req_t request;
         load(request, failure==3 ? '\0' : '\xE9', failure==4 ? "firmware.elf" : "firmware.bin");
         if (failure==5) request.content_type="application/octet-stream";
         web_firmware_update.fail_begin=failure==0;
         web_firmware_update.fail_write=failure==1;
         web_firmware_update.valid=failure!=2;
+        web_firmware_update.refuse_header=failure==6;
         const unsigned begins=web_firmware_update.begins;
         web.handle_ota_upload(&request);
         assert(request.status==expected[failure].status && request.response==expected[failure].message);
-        assert(web.ota_failed() && (web_firmware_update.begins>begins)==(failure<3));
+        assert(web.ota_failed() && (web_firmware_update.begins>begins)==(failure<3 || failure==6));
         assert(!web.is_ota_active() && !web_firmware_update.opened); assert_available();
     }
     web_firmware_update.fail_begin=false; web_firmware_update.fail_write=false; web_firmware_update.valid=true;
+    web_firmware_update.refuse_header=false;
     ready(web); task_fails=true;
     assert(!web.start_github_ota("v1.5.8")); assert_available(); task_fails=false;
     ready(web); assert(web.start_github_ota("v1.5.8"));

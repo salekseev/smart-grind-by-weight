@@ -2,6 +2,9 @@
 
 #include <esp_err.h>
 
+#include <algorithm>
+#include <cstring>
+
 #include "../config/constants.h"
 
 bool OtaWriter::fail(const char* reason) {
@@ -13,6 +16,11 @@ bool OtaWriter::fail(const char* reason) {
     return false;
 }
 
+bool OtaWriter::refuse(const char* reason) {
+    image_refused_ = true;
+    return fail(reason);
+}
+
 bool OtaWriter::begin(size_t expected_size) {
     if (handle_ != 0) return fail("An update is already in progress");
 
@@ -21,6 +29,8 @@ bool OtaWriter::begin(size_t expected_size) {
     if (expected_size > partition_->size) return fail("Firmware image is too large");
 
     written_ = 0;
+    header_size_ = 0;
+    image_refused_ = false;
     error_ = "";
     // Erase each sector as the image reaches it. Erasing the image's extent up
     // front blocks the caller for seconds, and for a browser upload that is the
@@ -35,7 +45,20 @@ bool OtaWriter::begin(size_t expected_size) {
 
 bool OtaWriter::write(const uint8_t* data, size_t length) {
     if (handle_ == 0) return fail("No update in progress");
-    if (length == 0) return true;
+    if (header_size_ < header_.size()) {
+        const size_t taken = std::min(length, header_.size() - header_size_);
+        memcpy(header_.data() + header_size_, data, taken);
+        header_size_ += taken;
+        data += taken;
+        length -= taken;
+        if (header_size_ < header_.size()) return true;
+        if (const char* reason = firmware_image::check_header(header_.data())) return refuse(reason);
+        if (!write_to_flash(header_.data(), header_.size())) return false;
+    }
+    return length == 0 || write_to_flash(data, length);
+}
+
+bool OtaWriter::write_to_flash(const uint8_t* data, size_t length) {
     if (written_ + length > partition_->size) return fail("Firmware image is too large");
 
     const esp_err_t err = esp_ota_write(handle_, data, length);
@@ -46,6 +69,7 @@ bool OtaWriter::write(const uint8_t* data, size_t length) {
 
 bool OtaWriter::end() {
     if (handle_ == 0) return fail("No update in progress");
+    if (header_size_ < header_.size()) return refuse("Firmware image is too short");
 
     const esp_ota_handle_t handle = handle_;
     handle_ = 0;

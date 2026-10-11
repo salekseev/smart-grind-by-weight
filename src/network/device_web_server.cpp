@@ -885,7 +885,11 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
             started = true;
         }
         if (!web_firmware_update.write(data, length)) {
-            refusal = {500, "Firmware write failed"};
+            // The writer refuses an image whose header rules it out before any
+            // of it reaches flash; anything else is a flash failure.
+            refusal = web_firmware_update.image_refused()
+                          ? Refusal{400, web_firmware_update.error()}
+                          : Refusal{500, "Firmware write failed"};
             return false;
         }
         ota_received_.fetch_add(length);
@@ -911,6 +915,9 @@ esp_err_t DeviceWebServer::handle_ota_upload(httpd_req_t* request) {
     if (!web_firmware_update.end()) {
         LOG_BLE("[WEB OTA] Image validation failed: %s\n", web_firmware_update.error());
         finish_ota(false);
+        if (web_firmware_update.image_refused()) {
+            return http::send(request, 400, "text/plain", web_firmware_update.error());
+        }
         return http::send(request, 500, "text/plain", "Firmware update failed");
     }
 

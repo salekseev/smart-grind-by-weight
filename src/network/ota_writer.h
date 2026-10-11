@@ -2,8 +2,11 @@
 
 #include <esp_ota_ops.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+
+#include "firmware_image.h"
 
 //==============================================================================
 // WEB OTA IMAGE WRITER
@@ -24,7 +27,11 @@ public:
      */
     bool begin(size_t expected_size);
 
-    /** Append image bytes. Writes must arrive in order. */
+    /**
+     * Append image bytes. Writes must arrive in order. The start of the image is
+     * held back until firmware_image::check_header() accepts it, so a refused
+     * image never reaches flash.
+     */
     bool write(const uint8_t* data, size_t length);
 
     /** Validate the image and set it as the boot partition. */
@@ -36,11 +43,19 @@ public:
     /** Human-readable reason the last operation failed. */
     const char* error() const { return error_; }
 
+    /** True when the last failure refused the image itself rather than flash. */
+    bool image_refused() const { return image_refused_; }
+
 private:
     bool fail(const char* reason);
+    bool refuse(const char* reason);
+    bool write_to_flash(const uint8_t* data, size_t length);
 
     esp_ota_handle_t handle_ = 0;
     const esp_partition_t* partition_ = nullptr;
     size_t written_ = 0;
+    std::array<uint8_t, firmware_image::HEADER_BYTES> header_{};
+    size_t header_size_ = 0;
+    bool image_refused_ = false;
     const char* error_ = "";
 };
