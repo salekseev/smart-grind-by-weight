@@ -35,6 +35,29 @@ std::string ip4_to_string(const esp_ip4_addr_t& address) {
     return text;
 }
 
+// The disconnect reasons a station attempt commonly ends with, in words a user
+// can act on. Anything else is logged by number.
+const char* disconnect_reason_text(uint8_t reason) {
+    switch (reason) {
+        case 0: return "no reply from the driver";
+        case WIFI_REASON_AUTH_EXPIRE: return "authentication timed out";
+        case WIFI_REASON_DISASSOC_DUE_TO_INACTIVITY: return "association timed out";
+        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+        case WIFI_REASON_HANDSHAKE_TIMEOUT: return "handshake timed out (wrong password or weak signal)";
+        case WIFI_REASON_BEACON_TIMEOUT: return "signal lost";
+        case WIFI_REASON_NO_AP_FOUND: return "network not found";
+        case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+        case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD: return "network security not supported";
+        case WIFI_REASON_AUTH_FAIL: return "authentication failed";
+        case WIFI_REASON_ASSOC_FAIL: return "association failed";
+        case WIFI_REASON_CONNECTION_FAIL: return "connection failed";
+        default: return nullptr;
+    }
+}
+
+// The driver reports this when it has no signal reading, e.g. for "no AP found".
+constexpr int8_t kNoRssi = -128;
+
 }  // namespace
 
 void SmartGrindNetworkManager::init(Preferences* preferences) {
@@ -114,13 +137,19 @@ bool SmartGrindNetworkManager::start_radio() {
 }
 
 void SmartGrindNetworkManager::wifi_event_handler(void* context, esp_event_base_t,
-                                                  int32_t id, void*) {
+                                                  int32_t id, void* data) {
     auto* self = static_cast<SmartGrindNetworkManager*>(context);
     if (!self) return;
 
     switch (id) {
-        case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
+            if (data) {
+                const auto* event = static_cast<const wifi_event_sta_disconnected_t*>(data);
+                self->last_disconnect_reason_.store(event->reason);
+                self->last_disconnect_rssi_.store(event->rssi);
+            }
+            [[fallthrough]];
+        case WIFI_EVENT_STA_START:
             self->station_got_ip_.store(false);
             // Retry within the current attempt, or within a background attempt
             // behind the setup access point; giving up, backing off and falling
@@ -168,7 +197,7 @@ void SmartGrindNetworkManager::update() {
         // Reconnect at once, as the Arduino core's auto-reconnect did. The retry
         // delay applies once this attempt times out, or if it cannot start.
         stop_mdns();
-        LOG_BLE("[WIFI] Connection lost; reconnecting\n");
+        LOG_BLE("[WIFI] Connection lost (%s); reconnecting\n", last_failure().c_str());
         set_state(NetworkState::WIFI_RETRY_WAIT);
         begin_connection();
         return;
@@ -178,11 +207,14 @@ void SmartGrindNetworkManager::update() {
     if (state() == NetworkState::WIFI_CONNECTING && elapsed_ms >= CONNECT_TIMEOUT_MS) {
         // Leave WIFI_CONNECTING before the disconnect raises DISCONNECTED: the
         // event handler, on the other core, reconnects only within an attempt.
+        const std::string failure = last_failure();
         if (ever_connected_) {
-            LOG_BLE("[WIFI] Reconnection timed out; retrying in %lus\n", RETRY_DELAY_MS / 1000);
+            LOG_BLE("[WIFI] Reconnection timed out (%s); retrying in %lus\n", failure.c_str(),
+                    RETRY_DELAY_MS / 1000);
             set_state(NetworkState::WIFI_RETRY_WAIT);
         } else {
-            LOG_BLE("[WIFI] Configured network unavailable; starting setup mode\n");
+            LOG_BLE("[WIFI] Configured network unavailable (%s); starting setup mode\n",
+                    failure.c_str());
             set_state(NetworkState::WIFI_SETUP_REQUIRED);
         }
         esp_wifi_disconnect();
@@ -198,7 +230,11 @@ void SmartGrindNetworkManager::update_setup_retry() {
 
     const uint32_t now = millis();
     if (setup_attempt_active_.load()) {
-        if (setup_clients_.load() == 0 && now - setup_attempt_at_ms_ < CONNECT_TIMEOUT_MS) return;
+        const bool client_joined = setup_clients_.load() > 0;
+        if (!client_joined && now - setup_attempt_at_ms_ < CONNECT_TIMEOUT_MS) return;
+        if (!client_joined) {
+            LOG_BLE("[WIFI] Configured network still unavailable (%s)\n", last_failure().c_str());
+        }
         // Clear the flag before the disconnect raises DISCONNECTED, as above.
         setup_attempt_active_.store(false);
         esp_wifi_disconnect();
@@ -208,6 +244,7 @@ void SmartGrindNetworkManager::update_setup_retry() {
     if (setup_clients_.load() > 0 || static_cast<int32_t>(now - setup_attempt_at_ms_) < 0) return;
 
     setup_attempt_at_ms_ = now;
+    last_disconnect_reason_.store(0);
     setup_attempt_active_.store(true);
     if (esp_wifi_connect() != ESP_OK) {
         setup_attempt_active_.store(false);
@@ -415,10 +452,13 @@ void SmartGrindNetworkManager::begin_connection() {
     config.sta.threshold.authmode = password.empty() ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_PSK;
     if (esp_wifi_set_config(WIFI_IF_STA, &config) != ESP_OK) return;
 
+    last_disconnect_reason_.store(0);
     set_state(NetworkState::WIFI_CONNECTING);
+    // Starting the radio raises WIFI_EVENT_STA_START, whose handler issues the
+    // connect; a radio that is already running needs it issued here.
+    const bool radio_was_running = wifi_started_;
     if (!start_radio()) return;
-    // Harmless if WIFI_EVENT_STA_START already issued the connect.
-    esp_wifi_connect();
+    if (radio_was_running) esp_wifi_connect();
     LOG_BLE("[WIFI] Connecting to configured network as %s.local\n", hostname.c_str());
 }
 
@@ -502,6 +542,19 @@ void SmartGrindNetworkManager::handle_connected() {
 
     LOG_BLE("[WIFI] Connected: %s (%s.local, mDNS=%s)\n", ip_address().c_str(),
             current_hostname.c_str(), mdns_started_ ? "OK" : "FAILED");
+}
+
+std::string SmartGrindNetworkManager::last_failure() const {
+    const uint8_t reason = last_disconnect_reason_.load();
+    const int8_t rssi = last_disconnect_rssi_.load();
+    char text[64];
+    const char* name = disconnect_reason_text(reason);
+    int length = name ? snprintf(text, sizeof(text), "%s", name)
+                      : snprintf(text, sizeof(text), "reason %u", reason);
+    if (reason != 0 && rssi != kNoRssi && length > 0 && length < static_cast<int>(sizeof(text))) {
+        snprintf(text + length, sizeof(text) - length, ", %d dBm", rssi);
+    }
+    return text;
 }
 
 void SmartGrindNetworkManager::stop_mdns() {

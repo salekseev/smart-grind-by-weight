@@ -32,6 +32,10 @@ struct WifiScanResult {
 
 class SmartGrindNetworkManager {
 public:
+    // How long one attempt on the saved network may take before it gives up. A
+    // router at the edge of range can need several scans and association tries.
+    static constexpr uint32_t CONNECT_TIMEOUT_MS = 30000;
+
     void init(Preferences* preferences);
     void update();
 
@@ -69,7 +73,6 @@ public:
     std::vector<WifiScanResult> scan_networks();
 
 private:
-    static constexpr uint32_t CONNECT_TIMEOUT_MS = 15000;
     static constexpr uint32_t RETRY_DELAY_MS = 30000;
     // How often the saved network is tried again behind the setup access point.
     static constexpr uint32_t SETUP_RETRY_INTERVAL_MS = 60000;
@@ -84,6 +87,10 @@ private:
     // Phones and laptops connected to the setup access point.
     std::atomic<int> setup_clients_{0};
     uint32_t setup_attempt_at_ms_ = 0;  // when the active attempt began, or the next one is due
+    // Why the driver last dropped the current attempt (0 = nothing reported yet),
+    // and the signal strength it reported then.
+    std::atomic<uint8_t> last_disconnect_reason_{0};
+    std::atomic<int8_t> last_disconnect_rssi_{0};
     bool ever_connected_ = false;
     bool mdns_started_ = false;
     bool wifi_started_ = false;
@@ -111,6 +118,8 @@ private:
     /** Close the setup access point once the station has joined the network. */
     void close_setup_access_point();
     void handle_connected();
+    /** Why the last attempt failed, e.g. "network not found" or "association timed out, -77 dBm". */
+    std::string last_failure() const;
     void stop_network();
     void set_state(NetworkState state);
     void stop_mdns();

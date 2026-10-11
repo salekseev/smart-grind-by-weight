@@ -214,7 +214,8 @@ void ProvisioningService::schedule_reboot() {
 
 void ProvisioningService::update_improv_serial() {
     constexpr uint32_t FRAME_TIMEOUT_MS = 100;
-    constexpr uint32_t CONNECT_TIMEOUT_MS = 20000;
+    // Outlasts the station's own attempt, so the reply reports how it ended.
+    constexpr uint32_t CONNECT_TIMEOUT_MS = SmartGrindNetworkManager::CONNECT_TIMEOUT_MS + 5000;
     constexpr size_t MAX_BYTES_PER_UPDATE = 64;
 
     if (improv_rx_position_ > 0 && millis() - improv_last_byte_ms_ > FRAME_TIMEOUT_MS) {

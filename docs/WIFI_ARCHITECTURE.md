@@ -8,8 +8,8 @@ the grinder's smaller feature set.
 
 ## User journey
 
-1. Try saved station credentials without blocking weight sampling, motor control,
-   touch, or rendering.
+1. Try saved station credentials for up to 30 seconds without blocking weight
+   sampling, motor control, touch, or rendering.
 2. If credentials are absent or cannot connect, start a secured setup access
    point with a generated, persisted password. When the saved network was only
    out of reach, try it again once a minute while nobody is connected to the
@@ -48,6 +48,14 @@ the grinder's smaller feature set.
   inactive application partition, reboot, and verify the expected version
   after boot. Update authentication and signed images are deliberately deferred
   until the end-to-end update experience is complete.
+- Give one attempt on the saved network 30 seconds. A router at the edge of
+  range (-84 to -89 dBm on the bench) misses scans, times out handshakes and
+  can take more than 15 seconds to associate. Bluetooth advertising made no
+  measurable difference: boots alternating between the default advertising
+  interval, a 100-150 ms interval and Bluetooth off joined at the same rate.
+- When an attempt gives up, log the driver's last disconnect reason and signal
+  strength ("network not found", "association timed out, -86 dBm"), so a weak
+  signal can be told apart from a wrong password.
 - Wi-Fi and Bluetooth may coexist during normal use. Before a web OTA upload,
   the main application loop temporarily shuts down idle Bluetooth and waits for
   internal memory to recover; active BLE transfers are never interrupted. If
@@ -89,8 +97,9 @@ protocol library. Incoming data is consumed in small bounded batches from the
 normal application loop, partial frames expire after 100 ms, and malformed
 credential frames are rejected before the protocol parser sees them. Wi-Fi
 connection attempts are asynchronous and report `Provisioned` plus the local
-HTTP URL on success, or return to `Authorized` with `Unable to connect` after a
-bounded attempt. Credentials are never written to the serial log.
+HTTP URL on success, or return to `Authorized` with `Unable to connect` once the
+station attempt has ended (at most 35 seconds). Credentials are never written to
+the serial log.
 
 The supported RPCs are Wi-Fi settings, current state, device information and
 network state. Network scanning, hostname changes and device-name changes are

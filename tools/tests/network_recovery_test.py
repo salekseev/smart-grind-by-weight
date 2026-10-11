@@ -1,5 +1,6 @@
 """Run the production Wi-Fi state machine, setup-mode retry and driver setup against ESP-IDF fakes."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -14,6 +15,7 @@ HARNESS = r'''
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 using esp_err_t = int;
 constexpr esp_err_t ESP_OK = 0, ESP_FAIL = -1;
 #define LOG_BLE(...) std::printf(__VA_ARGS__)
@@ -46,6 +48,16 @@ esp_err_t esp_wifi_set_mode(wifi_mode_t next) { mode = next; return ESP_OK; }
 esp_err_t esp_wifi_disconnect();
 constexpr int32_t WIFI_EVENT_STA_START = 2, WIFI_EVENT_STA_DISCONNECTED = 5,
                   WIFI_EVENT_AP_STACONNECTED = 14, WIFI_EVENT_AP_STADISCONNECTED = 15;
+struct wifi_event_sta_disconnected_t {
+    uint8_t ssid[32]; uint8_t ssid_len; uint8_t bssid[6]; uint8_t reason; int8_t rssi;
+};
+constexpr uint8_t WIFI_REASON_AUTH_EXPIRE = 2, WIFI_REASON_DISASSOC_DUE_TO_INACTIVITY = 4,
+                  WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT = 15, WIFI_REASON_BEACON_TIMEOUT = 200,
+                  WIFI_REASON_NO_AP_FOUND = 201, WIFI_REASON_AUTH_FAIL = 202,
+                  WIFI_REASON_ASSOC_FAIL = 203, WIFI_REASON_HANDSHAKE_TIMEOUT = 204,
+                  WIFI_REASON_CONNECTION_FAIL = 205,
+                  WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY = 210,
+                  WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD = 211;
 using esp_event_base_t = const char*;
 using esp_event_handler_t = void (*)(void*, esp_event_base_t, int32_t, void*);
 using esp_event_handler_instance_t = void*;
@@ -66,6 +78,10 @@ esp_err_t esp_event_handler_instance_register(esp_event_base_t base, int32_t, es
     return ESP_OK;
 }
 
+// ---- the production disconnect-reason wording ----
+''' + re.search(r"constexpr int8_t kNoRssi = [^;]+;", SOURCE).group(0) + "\n" \
+    + function(SOURCE, "const char* disconnect_reason_text(") + r'''
+
 // ---- SmartGrindNetworkManager members the production code touches ----
 enum class NetworkState : uint8_t {
     WIFI_DISABLED, WIFI_NO_CREDENTIALS, WIFI_CONNECTING, WIFI_CONNECTED,
@@ -73,13 +89,15 @@ enum class NetworkState : uint8_t {
 };
 class SmartGrindNetworkManager {
 public:
-    static constexpr uint32_t CONNECT_TIMEOUT_MS = 15000;
+    static constexpr uint32_t CONNECT_TIMEOUT_MS = 30000;
     static constexpr uint32_t RETRY_DELAY_MS = 30000;
     static constexpr uint32_t SETUP_RETRY_INTERVAL_MS = 60000;
     std::atomic<NetworkState> state_{NetworkState::WIFI_DISABLED};
     std::atomic<bool> setup_attempt_active_{false};
     std::atomic<int> setup_clients_{0};
     uint32_t setup_attempt_at_ms_ = 0;
+    std::atomic<uint8_t> last_disconnect_reason_{0};
+    std::atomic<int8_t> last_disconnect_rssi_{0};
     bool credentials = true;
     std::atomic<bool> initialized_{true};
     std::atomic<bool> enabled_{true};
@@ -115,6 +133,7 @@ public:
     void update();
     void update_setup_retry();
     void close_setup_access_point();
+    std::string last_failure() const;
     static void wifi_event_handler(void* context, esp_event_base_t base, int32_t id, void* data);
     static void ip_event_handler(void*, esp_event_base_t, int32_t, void*) {}
 };
@@ -129,7 +148,8 @@ esp_err_t esp_wifi_disconnect() {
     + function(SOURCE, "void SmartGrindNetworkManager::update()") \
     + function(SOURCE, "void SmartGrindNetworkManager::update_setup_retry()") \
     + function(SOURCE, "void SmartGrindNetworkManager::close_setup_access_point()") \
-    + function(SOURCE, "void SmartGrindNetworkManager::wifi_event_handler(") + r'''
+    + function(SOURCE, "void SmartGrindNetworkManager::wifi_event_handler(") \
+    + function(SOURCE, "std::string SmartGrindNetworkManager::last_failure() const") + r'''
 
 void connected(SmartGrindNetworkManager& wifi) {
     wifi.station_got_ip_ = true; wifi.update();
@@ -177,8 +197,11 @@ int main() {
     const int connects_before = connects, disconnects_before = disconnects;
     now_ms += SmartGrindNetworkManager::SETUP_RETRY_INTERVAL_MS - 1; setup.update();
     assert(connects == connects_before && !setup.setup_attempt_active_);
+    // A new attempt does not inherit the previous one's failure reason.
+    setup.last_disconnect_reason_ = WIFI_REASON_NO_AP_FOUND;
     now_ms += 1; setup.update();
     assert(connects == connects_before + 1 && setup.setup_attempt_active_);
+    assert(setup.last_disconnect_reason_ == 0);
     assert(setup.state() == NetworkState::WIFI_SETUP_AP && mode == WIFI_MODE_APSTA);
     // A drop within the attempt is retried within it.
     SmartGrindNetworkManager::wifi_event_handler(&setup, WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, nullptr);
@@ -226,6 +249,22 @@ int main() {
     assert(fresh.ensure_wifi_initialized());
     assert(station_creates == 1 && access_point_creates == 1);
     assert(driver_inits == 2 && wifi_registrations == 1 && ip_registrations == 2);
+
+    // A dropped attempt records why, so giving up can say what went wrong.
+    SmartGrindNetworkManager reasons;
+    radio_owner = &reasons;
+    assert(reasons.last_failure() == "no reply from the driver");
+    reasons.set_state(NetworkState::WIFI_CONNECTING);
+    wifi_event_sta_disconnected_t dropped = {};
+    dropped.reason = WIFI_REASON_NO_AP_FOUND; dropped.rssi = -128;
+    SmartGrindNetworkManager::wifi_event_handler(&reasons, WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &dropped);
+    assert(reasons.last_failure() == "network not found");
+    dropped.reason = WIFI_REASON_DISASSOC_DUE_TO_INACTIVITY; dropped.rssi = -77;
+    SmartGrindNetworkManager::wifi_event_handler(&reasons, WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &dropped);
+    assert(reasons.last_failure() == "association timed out, -77 dBm");
+    dropped.reason = 39; dropped.rssi = -70;
+    SmartGrindNetworkManager::wifi_event_handler(&reasons, WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &dropped);
+    assert(reasons.last_failure() == "reason 39, -70 dBm");
 }
 '''
 
